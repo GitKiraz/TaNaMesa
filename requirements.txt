@@ -1,0 +1,5 @@
+# TáNaMesa usa apenas bibliotecas da stdlib do Python (>= 3.10):
+#   tkinter (interface), sqlite3 (banco padrão), hashlib (hash de senha)
+#
+# Para usar MySQL em produção, conforme a documentação (seção 6.1):
+# mysql-connector-python>=8.3

@@ -1,48 +1,73 @@
 import tkinter as tk
 from tkinter import messagebox
-from constants import BG, CARD_BG, RED, LABEL_FG, LINK_FG
-from widgets import make_topbar, make_card, entry_field, tipo_usuario, action_button, link_label
+
+import database as db
+import session
+import ui
+from constants import BG, SURFACE, RED, INK, MUTED, TEXT, LINK
+from widgets import (make_topbar, entry_field, tipo_usuario,
+                     action_button, link_label)
 
 
 class LoginScreen(tk.Frame):
-    def __init__(self, master, switch_to_register):
+    def __init__(self, master, switch_to_register, on_success):
         super().__init__(master, bg=BG)
         self.switch = switch_to_register
+        self.on_success = on_success
         self._build()
 
     def _build(self):
-        make_topbar(self, "Tela de login")
+        make_topbar(self)
 
-        card = make_card(self)
+        wrapper = tk.Frame(self, bg=BG)
+        wrapper.pack(expand=True, fill="both")
 
-        tk.Label(card, text="TáNaMesa", bg=CARD_BG, fg=RED,
-                 font=("Georgia", 24, "bold")).pack(pady=(0, 6))
+        card = ui.Card(wrapper, padx=44, pady=36)
+        card.pack(expand=True)
+        body = card.body
 
-        self.email = entry_field(card, "Email")
-        self.senha = entry_field(card, "Senha", show="•")
+        tk.Label(body, text="Bem-vindo de volta",
+                 bg=SURFACE, fg=INK,
+                 font=ui.font(22, "bold")).pack(anchor="w")
+        tk.Label(body, text="Entre para continuar jogando.",
+                 bg=SURFACE, fg=MUTED,
+                 font=ui.font(11)).pack(anchor="w", pady=(0, 12))
 
-        tk.Label(card, text="Esqueci minha senha", bg=CARD_BG,
-                 fg=LINK_FG, font=("Georgia", 8, "underline"),
-                 cursor="hand2").pack(anchor="e", pady=(2, 0))
+        self.email = entry_field(body, "Email")
+        self.senha = entry_field(body, "Senha", show="•")
 
-        self.tipo = tipo_usuario(card)
+        tk.Label(body, text="Esqueci minha senha", bg=SURFACE,
+                 fg=LINK, font=ui.font(9, "bold"),
+                 cursor="hand2").pack(anchor="e", pady=(6, 0))
 
-        action_button(card, "Entrar", self._entrar)
+        self.tipo = tipo_usuario(body)
 
-        tk.Frame(card, bg=CARD_BG, height=1).pack(fill="x", pady=6)
+        action_button(body, "Entrar", self._entrar)
 
-        tk.Label(card, text="Não possui cadastro?", bg=CARD_BG,
-                 fg=LABEL_FG, font=("Georgia", 10)).pack()
-        link_label(card, "Cadastre-se", self.switch)
+        rodape = tk.Frame(body, bg=SURFACE)
+        rodape.pack(pady=(14, 0))
+        tk.Label(rodape, text="Não possui cadastro? ", bg=SURFACE,
+                 fg=TEXT, font=ui.font(10)).pack(side="left")
+        link_label(rodape, "Cadastre-se", self.switch)
 
     def _entrar(self):
         email = self.email.get().strip()
         senha = self.senha.get().strip()
         tipo  = self.tipo.get()
         if not email or not senha:
-            messagebox.showwarning("Atenção", "Preencha email e senha.")
+            messagebox.showwarning("Atenção", "Preencha todos os campos!")
             return
         if not tipo:
             messagebox.showwarning("Atenção", "Selecione o tipo de usuário.")
             return
-        messagebox.showinfo("Login", f"Bem-vindo!\nEmail: {email}\nTipo: {tipo}")
+
+        usuario = db.autenticar(email, senha, tipo)
+        if not usuario:
+            messagebox.showerror("Erro", "Erro ao efetuar login")
+            self.senha.delete(0, tk.END)
+            return
+
+        session.login(usuario)
+        self.email.delete(0, tk.END)
+        self.senha.delete(0, tk.END)
+        self.on_success()

@@ -1,7 +1,12 @@
+import sqlite3
 import tkinter as tk
 from tkinter import messagebox
-from constants import BG, CARD_BG, RED, LABEL_FG
-from widgets import make_topbar, make_card, entry_field, tipo_usuario, action_button, link_label
+
+import database as db
+import ui
+from constants import BG, SURFACE, INK, MUTED, TEXT
+from widgets import (make_topbar, entry_field, tipo_usuario,
+                     action_button, link_label)
 
 
 class RegisterScreen(tk.Frame):
@@ -11,28 +16,37 @@ class RegisterScreen(tk.Frame):
         self._build()
 
     def _build(self):
-        make_topbar(self, "Tela de cadastro")
+        make_topbar(self)
 
-        card = make_card(self)
+        wrapper = tk.Frame(self, bg=BG)
+        wrapper.pack(expand=True, fill="both")
 
-        tk.Label(card, text="TáNaMesa", bg=CARD_BG, fg=RED,
-                 font=("Georgia", 24, "bold")).pack(pady=(0, 6))
+        card = ui.Card(wrapper, padx=44, pady=32)
+        card.pack(expand=True)
+        body = card.body
 
-        self.nome     = entry_field(card, "Nome")
-        self.nickname = entry_field(card, "Nickname")
-        self.email    = entry_field(card, "Email")
-        self.senha    = entry_field(card, "Senha", show="•")
-        self.confirm  = entry_field(card, "Confirmar senha", show="•")
+        tk.Label(body, text="Crie sua conta", bg=SURFACE, fg=INK,
+                 font=ui.font(22, "bold")).pack(anchor="w")
+        tk.Label(body, text="Comece a jogar TáNaMesa em segundos.",
+                 bg=SURFACE, fg=MUTED,
+                 font=ui.font(11)).pack(anchor="w", pady=(0, 6))
 
-        self.tipo = tipo_usuario(card)
+        self.nome     = entry_field(body, "Nome")
+        self.nickname = entry_field(body, "Nickname")
+        self.email    = entry_field(body, "Email")
+        self.senha    = entry_field(body, "Senha (mín. 8 caracteres)",
+                                    show="•")
+        self.confirm  = entry_field(body, "Confirmar senha", show="•")
 
-        action_button(card, "Cadastrar", self._cadastrar)
+        self.tipo = tipo_usuario(body)
 
-        tk.Frame(card, bg=CARD_BG, height=1).pack(fill="x", pady=6)
+        action_button(body, "Cadastrar", self._cadastrar)
 
-        tk.Label(card, text="Já possui cadastro?", bg=CARD_BG,
-                 fg=LABEL_FG, font=("Georgia", 10)).pack()
-        link_label(card, "Faça login", self.switch)
+        rodape = tk.Frame(body, bg=SURFACE)
+        rodape.pack(pady=(14, 0))
+        tk.Label(rodape, text="Já possui cadastro? ", bg=SURFACE,
+                 fg=TEXT, font=ui.font(10)).pack(side="left")
+        link_label(rodape, "Faça login", self.switch)
 
     def _cadastrar(self):
         campos = {
@@ -49,9 +63,34 @@ class RegisterScreen(tk.Frame):
         if campos["Senha"] != campos["Confirmar senha"]:
             messagebox.showerror("Erro", "As senhas não coincidem.")
             return
+        if len(campos["Senha"]) < 8:
+            messagebox.showwarning("Atenção",
+                                   "A senha deve possuir no mínimo 8 dígitos.")
+            return
         if not self.tipo.get():
             messagebox.showwarning("Atenção", "Selecione o tipo de usuário.")
             return
+
+        try:
+            db.criar_usuario(
+                nome=campos["Nome"],
+                email=campos["Email"],
+                senha=campos["Senha"],
+                nickname=campos["Nickname"],
+                tipo_usuario=self.tipo.get(),
+            )
+        except sqlite3.IntegrityError:
+            messagebox.showerror("Erro ao cadastrar",
+                                 "Já existe um usuário com este e-mail.")
+            return
+        except Exception:
+            messagebox.showerror("Erro ao cadastrar",
+                                 "Não foi possível concluir o cadastro.")
+            return
+
         messagebox.showinfo("Cadastro",
                             f"Cadastro realizado!\nBem-vindo, {campos['Nome']}!")
+        for w in (self.nome, self.nickname, self.email,
+                  self.senha, self.confirm):
+            w.delete(0, tk.END)
         self.switch()

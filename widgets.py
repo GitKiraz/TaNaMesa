@@ -1,83 +1,217 @@
+"""Componentes visuais reutilizáveis — layout / forms / sidebar."""
 import tkinter as tk
-from constants import (
-    BG, CARD_BG, SHADOW, RED, DARK,
-    LABEL_FG, ENTRY_BG, BTN_BG, BTN_FG, LINK_FG, HINT_FG
-)
+
+import session
+import ui
+from constants import (BG, SURFACE, SOFT, TINT, RED, RED_DARK,
+                       INK, TEXT, MUTED, SUBTLE, LINE,
+                       LABEL_FG, LINK_FG)
 
 
-def make_topbar(parent, hint_text):
-    """Barra superior: logo à esquerda, dica de tela à direita."""
-    bar = tk.Frame(parent, bg=BG, pady=10)
-    bar.pack(side="top", fill="x", padx=16)
+# ---------------------------------------------------------- Top bar ----
 
-    # Logo (esquerda)
+def make_topbar(parent, hint_text="", on_logout=None):
+    """Barra superior usada nas telas SEM sidebar (login/cadastro)."""
+    bar = tk.Frame(parent, bg=BG)
+    bar.pack(side="top", fill="x", padx=24, pady=16)
+
     logo = tk.Frame(bar, bg=BG)
     logo.pack(side="left")
-    tk.Label(logo, text="Etec", bg=BG, fg=DARK,
-             font=("Georgia", 16, "bold")).pack(anchor="w")
-    tk.Label(logo, text="Júlio de Mesquita", bg=BG, fg=RED,
-             font=("Georgia", 8)).pack(anchor="w")
-    tk.Label(logo, text="Santo André", bg=BG, fg=DARK,
-             font=("Georgia", 7)).pack(anchor="w")
+    tk.Label(logo, text="Etec", bg=BG, fg=INK,
+             font=ui.font(15, "bold")).pack(anchor="w")
+    tk.Label(logo, text="Júlio de Mesquita  ·  Santo André",
+             bg=BG, fg=MUTED, font=ui.font(9)).pack(anchor="w")
 
-    # Dica de tela (direita)
-    tk.Label(bar, text=hint_text, bg=BG, fg=HINT_FG,
-             font=("Georgia", 9)).pack(side="right", anchor="ne")
-
-
-def make_card(parent):
-    """Card branco centralizado com sombra simulada."""
-    wrapper = tk.Frame(parent, bg=BG)
-    wrapper.pack(expand=True)
-
-    shadow = tk.Frame(wrapper, bg=SHADOW)
-    shadow.pack()
-
-    card = tk.Frame(shadow, bg=CARD_BG, padx=36, pady=24)
-    card.pack(padx=2, pady=2)
-
-    return card
+    right = tk.Frame(bar, bg=BG)
+    right.pack(side="right")
+    if hint_text:
+        tk.Label(right, text=hint_text, bg=BG, fg=SUBTLE,
+                 font=ui.font(10)).pack(side="right", padx=(0, 12))
+    if on_logout:
+        ui.GhostButton(right, "Sair", command=on_logout,
+                       fg=TEXT, border=LINE,
+                       padx=14, pady=8, size=10).pack(side="right")
 
 
-def entry_field(parent, label_text, show=""):
-    """Label + Entry empilhados."""
-    tk.Label(parent, text=label_text, bg=CARD_BG, fg=LABEL_FG,
-             font=("Georgia", 10)).pack(anchor="w", pady=(10, 2))
-    e = tk.Entry(parent, bg=ENTRY_BG, relief="flat", bd=4,
-                 font=("Georgia", 10), show=show, width=30)
-    e.pack(fill="x", ipady=4)
+# ----------------------------------------------------------- Form fields --
+
+def entry_field(parent, label_text, show="", initial=""):
+    """Label estilizado + ModernEntry."""
+    tk.Label(parent, text=label_text, bg=parent.cget("bg"),
+             fg=TEXT, font=ui.font(10, "bold")).pack(
+        anchor="w", pady=(14, 4))
+    e = ui.ModernEntry(parent, show=show)
+    if initial:
+        e.insert(0, initial)
+    e.pack(fill="x")
     return e
 
 
-def tipo_usuario(parent):
-    """Radio buttons Aluno / Professor."""
-    tk.Label(parent, text="Tipo de usuário:", bg=CARD_BG, fg=LABEL_FG,
-             font=("Georgia", 10)).pack(anchor="w", pady=(12, 4))
-    var = tk.StringVar(value="")
-    row = tk.Frame(parent, bg=CARD_BG)
-    row.pack(anchor="w")
-    tk.Radiobutton(row, text="Aluno",     variable=var, value="aluno",
-                   bg=CARD_BG, font=("Georgia", 10)).pack(side="left", padx=(0, 12))
-    tk.Radiobutton(row, text="Professor", variable=var, value="professor",
-                   bg=CARD_BG, font=("Georgia", 10)).pack(side="left")
+def tipo_usuario(parent, initial=""):
+    """Seleção Aluno / Professor estilizada (chip buttons)."""
+    parent_bg = parent.cget("bg")
+    tk.Label(parent, text="Tipo de usuário", bg=parent_bg, fg=TEXT,
+             font=ui.font(10, "bold")).pack(anchor="w", pady=(16, 6))
+
+    var = tk.StringVar(value=initial)
+    row = tk.Frame(parent, bg=parent_bg)
+    row.pack(anchor="w", fill="x")
+
+    chips = {}
+
+    def select(valor):
+        var.set(valor)
+        for v, chip in chips.items():
+            chip.set_selected(v == valor)
+
+    class Chip(ui.RoundedButton):
+        def set_selected(self, sel):
+            self._bg     = RED if sel else "#ffffff"
+            self._hover  = RED_DARK if sel else TINT
+            self._active = ui._shade(self._bg, -0.15)
+            self._fg     = "#ffffff" if sel else TEXT
+            self._render(self._bg)
+
+    for valor, rotulo in [("aluno", "Aluno"), ("professor", "Professor")]:
+        chip = Chip(row, rotulo, command=lambda v=valor: select(v),
+                    bg="#ffffff", fg=TEXT, hover_bg=TINT,
+                    radius=999, padx=22, pady=8, size=11,
+                    parent_bg=parent_bg)
+        chip.pack(side="left", padx=(0, 8))
+        chips[valor] = chip
+
+    if initial in chips:
+        select(initial)
     return var
 
 
-def action_button(parent, text, command):
-    """Botão principal escuro."""
-    btn = tk.Button(parent, text=text, command=command,
-                    bg=BTN_BG, fg=BTN_FG, relief="flat",
-                    font=("Georgia", 11, "bold"), width=16,
-                    cursor="hand2", activebackground="#444444",
-                    activeforeground=BTN_FG, bd=0, pady=7)
-    btn.pack(pady=(16, 4), fill="x")
+def action_button(parent, text, command, bg=RED, fg="#ffffff"):
+    """Botão de ação primário (cantos arredondados, full-width)."""
+    btn = ui.RoundedButton(parent, text, command=command,
+                           bg=bg, fg=fg, radius=10,
+                           padx=28, pady=12, size=12)
+    btn.pack(pady=(18, 4))
     return btn
 
 
 def link_label(parent, text, command):
     """Texto clicável estilo link."""
-    lbl = tk.Label(parent, text=text, bg=CARD_BG, fg=LINK_FG,
-                   font=("Georgia", 10, "underline"), cursor="hand2")
-    lbl.pack()
-    lbl.bind("<Button-1>", lambda e: command())
+    lbl = tk.Label(parent, text=text, bg=parent.cget("bg"),
+                   fg=LINK_FG, font=ui.font(10, "bold"),
+                   cursor="hand2")
+    lbl.pack(pady=(2, 0))
+    lbl.bind("<Button-1>", lambda _e: command())
     return lbl
+
+
+def section_title(parent, text, sub=""):
+    """Título grande de seção, com subtítulo opcional."""
+    parent_bg = parent.cget("bg")
+    tk.Label(parent, text=text, bg=parent_bg, fg=INK,
+             font=ui.font(22, "bold")).pack(anchor="w")
+    if sub:
+        tk.Label(parent, text=sub, bg=parent_bg, fg=MUTED,
+                 font=ui.font(11)).pack(anchor="w", pady=(2, 0))
+
+
+# ----------------------------------------------------------- Sidebar ----
+
+def make_sidebar(parent, items, ativo=None, on_logout=None):
+    """
+    Sidebar moderna: logo + menu rolável + perfil/sair no rodapé.
+    items: lista de (label, callback)
+    """
+    side = tk.Frame(parent, bg=SOFT, width=240)
+    side.pack(side="left", fill="y")
+    side.pack_propagate(False)
+
+    # --- Cabeçalho (logo) ---
+    header = tk.Frame(side, bg=SOFT)
+    header.pack(fill="x", pady=(28, 18), padx=22)
+    tk.Label(header, text="TáNaMesa", bg=SOFT, fg=RED,
+             font=ui.font(20, "bold")).pack(anchor="w")
+    tk.Label(header, text="Dominó digital  ·  Etec", bg=SOFT, fg=MUTED,
+             font=ui.font(9)).pack(anchor="w")
+
+    # --- Separador ---
+    tk.Frame(side, bg=LINE, height=1).pack(fill="x", padx=22, pady=(0, 12))
+
+    # --- Itens do menu ---
+    menu = tk.Frame(side, bg=SOFT)
+    menu.pack(fill="x", padx=14)
+
+    for label, cmd in items:
+        ativo_item = (label == ativo)
+        _SidebarItem(menu, label, cmd, ativo=ativo_item).pack(fill="x", pady=2)
+
+    # --- Rodapé com usuário + sair ---
+    rodape = tk.Frame(side, bg=SOFT)
+    rodape.pack(side="bottom", fill="x", padx=14, pady=14)
+
+    u = session.atual() or {}
+    perfil = tk.Frame(rodape, bg=SOFT)
+    perfil.pack(fill="x", pady=(0, 8))
+    ui.Avatar(perfil, u.get("nome", "?"), size=38, bg=RED).pack(side="left")
+    txt = tk.Frame(perfil, bg=SOFT)
+    txt.pack(side="left", padx=10)
+    tk.Label(txt, text=u.get("nome", "Convidado"), bg=SOFT, fg=INK,
+             font=ui.font(10, "bold"), anchor="w").pack(anchor="w")
+    tk.Label(txt, text=u.get("tipo_usuario", "").capitalize() or "—",
+             bg=SOFT, fg=MUTED, font=ui.font(9), anchor="w").pack(anchor="w")
+
+    if on_logout:
+        ui.GhostButton(rodape, "Sair da conta", command=on_logout,
+                       fg=TEXT, border=LINE, padx=14, pady=10,
+                       size=10, parent_bg=SOFT).pack(fill="x")
+
+    return side
+
+
+class _SidebarItem(tk.Frame):
+    """Item do menu lateral: pill arredondada, hover, estado ativo."""
+
+    def __init__(self, parent, label, cmd, ativo=False):
+        super().__init__(parent, bg=SOFT)
+        self._label = label
+        self._cmd = cmd
+        self._ativo = ativo
+
+        self._bg_normal = SOFT
+        self._bg_hover  = TINT
+        self._bg_ativo  = RED
+        self._fg_normal = TEXT
+        self._fg_ativo  = "#ffffff"
+
+        self._btn = tk.Canvas(self, width=200, height=40,
+                              highlightthickness=0, bd=0, bg=SOFT)
+        self._btn.pack(fill="x")
+
+        self._render(self._bg_ativo if ativo else self._bg_normal)
+
+        self._btn.bind("<Enter>", self._on_enter)
+        self._btn.bind("<Leave>", self._on_leave)
+        self._btn.bind("<Button-1>", self._on_click)
+        self._btn.configure(cursor="hand2")
+
+    def _render(self, bg):
+        self._btn.delete("all")
+        self._btn.update_idletasks()
+        w = self._btn.winfo_width() or 200
+        h = 40
+        pts = ui.rounded_points(2, 2, w - 2, h - 2, 10)
+        self._btn.create_polygon(pts, smooth=True, fill=bg, outline=bg)
+        fg = self._fg_ativo if self._ativo else self._fg_normal
+        self._btn.create_text(18, h // 2, text=self._label,
+                              fill=fg, anchor="w",
+                              font=ui.font(11, "bold"))
+
+    def _on_enter(self, _):
+        if not self._ativo:
+            self._render(self._bg_hover)
+
+    def _on_leave(self, _):
+        self._render(self._bg_ativo if self._ativo else self._bg_normal)
+
+    def _on_click(self, _):
+        if self._cmd:
+            self._cmd()

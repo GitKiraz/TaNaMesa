@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+.pytest_cache/
+
+# Banco local (gerado automaticamente em runtime)
+*.db
+
+# Ambientes virtuais
+.venv/
+venv/
+env/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+.DS_Store
