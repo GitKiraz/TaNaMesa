@@ -306,6 +306,9 @@ class ModernEntry(tk.Frame):
         inner.pack(fill="both", expand=True)
 
         self.entry = tk.Entry(inner, bg=bg_inner, relief="flat", bd=0,
+                              highlightthickness=0,
+                              readonlybackground=bg_inner,
+                              disabledbackground=bg_inner,
                               font=font(11), show=show, width=width,
                               insertbackground="#111827")
         self.entry.pack(fill="x")

@@ -7,7 +7,6 @@ from widgets import section_title
 
 
 TIME = [
-    ("BB", "Bianca Borges Santana"),
     ("CA", "Caio Atzinger Pfeilsticker"),
     ("JP", "João Paulo de Lima Martins"),
 ]

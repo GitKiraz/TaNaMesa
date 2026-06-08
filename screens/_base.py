@@ -9,7 +9,7 @@ from widgets import make_sidebar
 def itens_sidebar(nav):
     """Itens padrão do menu lateral. Adapta para professor."""
     base = [
-        ("Iniciar nova partida", nav("options")),
+        ("Iniciar nova partida", nav("home")),
         ("Opções",               nav("options")),
         ("Perfil",               nav("profile")),
         ("Ajuda",                nav("help")),

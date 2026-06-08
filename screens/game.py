@@ -1,12 +1,16 @@
 """
 Tela do jogo: dominó digital de funções inorgânicas.
 
-Mecânica:
+Mecânica (dominó de funções inorgânicas):
 - O aluno recebe uma mão de peças (7) e uma peça inicial é posta no
-  tabuleiro.
-- Clicando em uma peça da mão e em "Encaixar à esquerda" ou
-  "Encaixar à direita", o sistema valida por correspondência conceitual.
-- Acertos somam pontos; erros contam. Tempo é cronometrado.
+  tabuleiro. Cada metade de peça exibe uma substância/propriedade e
+  guarda, internamente, a sua FUNÇÃO (ácido, base, sal ou óxido).
+- Clicando em uma peça da mão e em "Encaixar à esquerda" / "à direita",
+  o encaixe é válido quando a função da metade encostada é igual à
+  função exposta naquela ponta do tabuleiro (ex.: HCl liga em "pH < 7"
+  porque ambos são ácidos). A peça é girada automaticamente se preciso.
+- Acertos somam pontos; erros contam. Tempo é cronometrado. Esvaziar a
+  mão dá bônus.
 - A partida termina quando a mão esvazia, não há jogadas, ou o aluno sai.
 """
 import random
@@ -24,8 +28,14 @@ from screens._base import AuthScreen
 
 PONTOS_ACERTO = 10
 PONTOS_ERRO   = -2
+BONUS_MAO_VAZIA = 50      # bônus por esvaziar a mão (partida "vencida")
 TAMANHO_MAO   = 7
 LARGURA_PECA  = ui.RoundedPiece.W + 12   # peça + margem entre peças
+
+# Rótulo amigável de cada função (para feedback ao aluno)
+NOME_FUNCAO = {
+    "acido": "ácido", "base": "base", "sal": "sal", "oxido": "óxido",
+}
 
 
 class GameScreen(AuthScreen):
@@ -33,7 +43,7 @@ class GameScreen(AuthScreen):
 
     def __init__(self, master, nav, on_logout, nivel):
         self.nivel = nivel
-        self._cadeia      = []     # lista de (esq_visivel, dir_visivel, id_peca)
+        self._cadeia      = []     # lista de slots (dict): ver _slot()
         self._mao         = []     # peças dict do banco
         self._selecionada = None   # id da peça selecionada
         self._pontuacao   = 0
@@ -57,8 +67,9 @@ class GameScreen(AuthScreen):
         todas = db.carregar_pecas(self.nivel["id_nivel"])
         random.shuffle(todas)
         inicial = todas.pop(0)
-        self._cadeia.append((inicial["lado_a"], inicial["lado_b"],
-                             inicial["id_peca"]))
+        self._cadeia.append(self._slot(inicial["lado_a"], inicial["chave_a"],
+                                       inicial["lado_b"], inicial["chave_b"],
+                                       inicial["id_peca"]))
         self._mao = todas[:TAMANHO_MAO]
 
         # --- HUD escuro com 3 métricas ---
@@ -86,8 +97,9 @@ class GameScreen(AuthScreen):
 
         # --- Instrução ---
         info = tk.Label(parent,
-                        text="Clique em uma peça da sua mão e escolha "
-                             "uma extremidade do tabuleiro para encaixar.",
+                        text="Conecte peças da MESMA função (ácido, base, sal "
+                             "ou óxido): clique numa peça da mão e escolha a "
+                             "ponta do tabuleiro. Esvazie a mão para vencer!",
                         bg=BG, fg=MUTED, font=ui.font(10, "normal"))
         info.pack(pady=(2, 8))
 
@@ -189,9 +201,8 @@ class GameScreen(AuthScreen):
             draw_fn(linha, item)
 
     def _render_tabuleiro(self):
-        def draw(parent, entrada):
-            esq, dir_, _id = entrada
-            ui.RoundedPiece(parent, esq, dir_,
+        def draw(parent, slot):
+            ui.RoundedPiece(parent, slot["da"], slot["db"],
                             parent_bg=parent.cget("bg")
                             ).pack(side="left", padx=6, pady=4)
         self._render_grade(self._tabuleiro_frame, self._cadeia, draw)
@@ -224,6 +235,11 @@ class GameScreen(AuthScreen):
 
     # ---------------------------------------------------------- regras ----
 
+    @staticmethod
+    def _slot(da, ka, db, kb, id_peca):
+        """Uma peça posicionada no tabuleiro: textos (da/db) + funções (ka/kb)."""
+        return {"da": da, "ka": ka, "db": db, "kb": kb, "id": id_peca}
+
     def _peca_por_id(self, id_peca):
         for p in self._mao:
             if p["id_peca"] == id_peca:
@@ -241,21 +257,23 @@ class GameScreen(AuthScreen):
         if not peca:
             return
 
-        ok = self._encaixar(peca, lado)
-        if ok:
+        funcao = self._encaixar(peca, lado)
+        if funcao is not None:
             self._mao = [p for p in self._mao
                          if p["id_peca"] != self._selecionada]
             self._acertos   += 1
             self._pontuacao += PONTOS_ACERTO
+            nome = NOME_FUNCAO.get(funcao, funcao)
             db.registrar_jogada(self._partida_id, peca["id_peca"],
-                                True, "encaixe válido")
-            self._flash(PIECE_VALID, "✓ Encaixe válido!  +10 pts")
+                                True, f"encaixe válido ({nome})")
+            self._flash(PIECE_VALID, f"✓ {nome.capitalize()}!  +10 pts")
         else:
             self._erros     += 1
             self._pontuacao += PONTOS_ERRO
             db.registrar_jogada(self._partida_id, peca["id_peca"],
                                 False, "encaixe inválido")
-            self._flash(PIECE_INVALID, "✗ Encaixe inválido")
+            self._flash(PIECE_INVALID,
+                        "✗ Função diferente — " + self._dica_pontas())
 
         self._selecionada = None
         self._atualizar_hud()
@@ -264,34 +282,42 @@ class GameScreen(AuthScreen):
         self._checar_fim()
 
     def _encaixar(self, peca, lado):
-        a, b = peca["lado_a"], peca["lado_b"]
+        """Encaixa pela FUNÇÃO química; gira a peça se necessário."""
+        da, ka = peca["lado_a"], peca["chave_a"]
+        db, kb = peca["lado_b"], peca["chave_b"]
+        pid = peca["id_peca"]
         if lado == "dir":
-            exposto = self._cadeia[-1][1]
-            if a == exposto:
-                self._cadeia.append((a, b, peca["id_peca"]))
-                return True
-            if b == exposto:
-                self._cadeia.append((b, a, peca["id_peca"]))
-                return True
+            exposto = self._cadeia[-1]["kb"]
+            if ka == exposto:                       # metade A encosta na ponta
+                self._cadeia.append(self._slot(da, ka, db, kb, pid))
+                return exposto
+            if kb == exposto:                       # gira: metade B encosta
+                self._cadeia.append(self._slot(db, kb, da, ka, pid))
+                return exposto
         else:
-            exposto = self._cadeia[0][0]
-            if a == exposto:
-                self._cadeia.insert(0, (b, a, peca["id_peca"]))
-                return True
-            if b == exposto:
-                self._cadeia.insert(0, (a, b, peca["id_peca"]))
-                return True
-        return False
+            exposto = self._cadeia[0]["ka"]
+            if kb == exposto:                       # metade B encosta na ponta
+                self._cadeia.insert(0, self._slot(da, ka, db, kb, pid))
+                return exposto
+            if ka == exposto:                       # gira: metade A encosta
+                self._cadeia.insert(0, self._slot(db, kb, da, ka, pid))
+                return exposto
+        return None
 
     def _ha_jogada_possivel(self):
         if not self._cadeia or not self._mao:
             return False
-        esq = self._cadeia[0][0]
-        dir_ = self._cadeia[-1][1]
+        pontas = {self._cadeia[0]["ka"], self._cadeia[-1]["kb"]}
         for p in self._mao:
-            if p["lado_a"] in (esq, dir_) or p["lado_b"] in (esq, dir_):
+            if p["chave_a"] in pontas or p["chave_b"] in pontas:
                 return True
         return False
+
+    def _dica_pontas(self):
+        """Texto com as funções expostas nas extremidades do tabuleiro."""
+        nomes = sorted({NOME_FUNCAO.get(self._cadeia[0]["ka"], "?"),
+                        NOME_FUNCAO.get(self._cadeia[-1]["kb"], "?")})
+        return "as pontas pedem " + " ou ".join(nomes)
 
     def _passar(self):
         if not self._ha_jogada_possivel():
@@ -310,7 +336,10 @@ class GameScreen(AuthScreen):
 
     def _checar_fim(self):
         if not self._mao:
-            self._encerrar(motivo="mão esvaziada")
+            self._pontuacao += BONUS_MAO_VAZIA
+            self._flash(PIECE_VALID, f"🏆 Mão zerada!  +{BONUS_MAO_VAZIA} bônus")
+            self._atualizar_hud()
+            self._encerrar(motivo=f"mão esvaziada — vitória! (+{BONUS_MAO_VAZIA} bônus)")
         elif not self._ha_jogada_possivel():
             messagebox.showinfo("Fim de jogo",
                                 "Nenhuma peça da sua mão encaixa mais. "

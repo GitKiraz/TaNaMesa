@@ -34,8 +34,10 @@ CREATE TABLE IF NOT EXISTS nivel (
 CREATE TABLE IF NOT EXISTS peca (
     id_peca       INTEGER PRIMARY KEY AUTOINCREMENT,
     id_nivel      INTEGER NOT NULL,
-    lado_a        TEXT    NOT NULL,
-    lado_b        TEXT    NOT NULL,
+    lado_a        TEXT    NOT NULL,   -- representação exibida na metade A
+    lado_b        TEXT    NOT NULL,   -- representação exibida na metade B
+    chave_a       TEXT    NOT NULL DEFAULT '',  -- função química da metade A (encaixe)
+    chave_b       TEXT    NOT NULL DEFAULT '',  -- função química da metade B (encaixe)
     tipo_conexao  TEXT    NOT NULL,
     ativo         INTEGER NOT NULL DEFAULT 1,
     FOREIGN KEY (id_nivel) REFERENCES nivel(id_nivel)
@@ -95,12 +97,37 @@ def hash_senha(senha: str) -> str:
 
 
 def init_db():
-    """Cria tabelas e popula dados iniciais se ainda não existirem."""
+    """Cria tabelas e popula dados iniciais se ainda não existirem.
+
+    Faz uma migração suave: bancos antigos (sem as colunas de função nas
+    peças) ganham as colunas e têm o conteúdo do dominó re-semeado, sem
+    apagar usuários nem o histórico de partidas/jogadas.
+    """
     with conn() as c:
         c.executescript(SCHEMA_SQL)
-        cur = c.execute("SELECT COUNT(*) AS n FROM nivel")
-        if cur.fetchone()["n"] == 0:
-            _seed(c)
+        _migrar_colunas(c)
+
+        if c.execute("SELECT COUNT(*) AS n FROM nivel").fetchone()["n"] == 0:
+            _seed_niveis(c)
+
+        # (Re)semeia as peças se não houver peças ativas já no formato novo
+        # (com função química preenchida). Peças antigas são apenas
+        # desativadas — preservando as FKs em `jogada`.
+        ativas = c.execute(
+            "SELECT COUNT(*) AS n FROM peca WHERE ativo = 1 AND chave_a <> ''"
+        ).fetchone()["n"]
+        if ativas == 0:
+            c.execute("UPDATE peca SET ativo = 0")
+            _seed_pecas(c)
+
+
+def _migrar_colunas(c):
+    """Adiciona colunas novas em bancos criados por versões anteriores."""
+    cols = {r["name"] for r in c.execute("PRAGMA table_info(peca)")}
+    if "chave_a" not in cols:
+        c.execute("ALTER TABLE peca ADD COLUMN chave_a TEXT NOT NULL DEFAULT ''")
+    if "chave_b" not in cols:
+        c.execute("ALTER TABLE peca ADD COLUMN chave_b TEXT NOT NULL DEFAULT ''")
 
 
 # ---------------------------------------------------------------- Usuário ---
@@ -220,8 +247,76 @@ def gerar_relatorio(id_professor, filtros=""):
 
 # ---------------------------------------------------------------- Seed ------
 
-def _seed(c):
-    """Popula níveis e peças do dominó de funções inorgânicas."""
+# As quatro funções inorgânicas são as "pontas" que se encaixam: duas
+# metades conectam quando pertencem à MESMA função. O aluno, portanto,
+# joga classificando substâncias — não casando textos idênticos.
+FUNCOES = ["acido", "base", "sal", "oxido"]
+
+# Representações de cada função por nível. Quanto mais avançado o nível,
+# mais abstratas/variadas as formas (fórmula → nome → propriedade).
+REPRESENTACOES = {
+    # FÁCIL — fórmula ↔ classificação (inclui o nome da função como dica)
+    1: {
+        "acido": ["HCl", "H2SO4", "HNO3", "H3PO4", "Ácido"],
+        "base":  ["NaOH", "KOH", "Ca(OH)2", "Mg(OH)2", "Base"],
+        "sal":   ["NaCl", "KNO3", "CaCO3", "Na2SO4", "Sal"],
+        "oxido": ["CO2", "Na2O", "CaO", "Fe2O3", "Óxido"],
+    },
+    # MÉDIO — nome ↔ fórmula (exige nomenclatura)
+    2: {
+        "acido": ["HCl", "Ácido Clorídrico", "H2SO4", "Ácido Sulfúrico",
+                  "HNO3", "Ácido Nítrico", "H2CO3", "Ácido Carbônico"],
+        "base":  ["NaOH", "Hidróxido de Sódio", "KOH", "Hidróxido de Potássio",
+                  "Ca(OH)2", "Hidróxido de Cálcio", "NH4OH", "Hidróxido de Amônio"],
+        "sal":   ["NaCl", "Cloreto de Sódio", "CaCO3", "Carbonato de Cálcio",
+                  "KNO3", "Nitrato de Potássio", "Na2SO4", "Sulfato de Sódio"],
+        "oxido": ["CO2", "Dióxido de Carbono", "CaO", "Óxido de Cálcio",
+                  "Fe2O3", "Óxido de Ferro III", "SO3", "Trióxido de Enxofre"],
+    },
+    # DIFÍCIL — mistura fórmula, nome e propriedades
+    3: {
+        "acido": ["HCl", "Libera H+ em água", "pH < 7", "Ácido Sulfúrico",
+                  "Sabor azedo", "H3PO4"],
+        "base":  ["NaOH", "Libera OH- em água", "pH > 7", "Hidróxido de Cálcio",
+                  "Sabor adstringente", "KOH"],
+        "sal":   ["NaCl", "Composto iônico", "Cátion + ânion",
+                  "Carbonato de Cálcio", "Vem de ácido + base", "KNO3"],
+        "oxido": ["CO2", "Óxido ácido", "Binário com oxigênio",
+                  "Óxido de Ferro III", "Anidrido", "CaO"],
+    },
+}
+
+
+def _gerar_pecas(repres, repeticoes=2):
+    """
+    Monta um conjunto de dominó *bem conectado* a partir das representações.
+
+    Gera o conjunto completo (todos os pares de funções, inclusive os
+    "duplos"), repetido `repeticoes` vezes, variando a forma exibida de
+    cada função a cada uso. Isso garante que cada função apareça em muitas
+    peças — então a mão distribuída quase sempre tem jogadas, acabando com
+    o bug de "trava na 1ª peça".
+
+    Retorna lista de (lado_a, chave_a, lado_b, chave_b, tipo_conexao).
+    """
+    contador = {k: 0 for k in repres}
+
+    def proxima(k):
+        formas = repres[k]
+        forma = formas[contador[k] % len(formas)]
+        contador[k] += 1
+        return forma
+
+    pecas = []
+    for _ in range(repeticoes):
+        for i in range(len(FUNCOES)):
+            for j in range(i, len(FUNCOES)):
+                ka, kb = FUNCOES[i], FUNCOES[j]
+                pecas.append((proxima(ka), ka, proxima(kb), kb, f"{ka}-{kb}"))
+    return pecas
+
+
+def _seed_niveis(c):
     niveis = [
         ("Nível fácil",   1),
         ("Nível médio",   2),
@@ -229,91 +324,18 @@ def _seed(c):
     ]
     c.executemany("INSERT INTO nivel (descricao, ordem) VALUES (?, ?)", niveis)
 
-    # Cada peça: (lado_a, lado_b, tipo_conexao)
-    # Para que duas peças "conectem", o valor textual exposto em uma extremidade
-    # deve ser igual ao valor textual da extremidade adjacente.
-    # Convenção: usar a forma canônica do conceito (ex.: "Ácido", "HCl", "Base").
 
-    # ----- FÁCIL: associação por classificação (função inorgânica) -----
-    faceis = [
-        ("HCl",     "Ácido",   "formula-classificacao"),
-        ("Ácido",   "H2SO4",   "classificacao-formula"),
-        ("H2SO4",   "Ácido",   "formula-classificacao"),
-        ("Ácido",   "HNO3",    "classificacao-formula"),
-        ("NaOH",    "Base",    "formula-classificacao"),
-        ("Base",    "KOH",     "classificacao-formula"),
-        ("KOH",     "Base",    "formula-classificacao"),
-        ("Base",    "Ca(OH)2", "classificacao-formula"),
-        ("NaCl",    "Sal",     "formula-classificacao"),
-        ("Sal",     "KNO3",    "classificacao-formula"),
-        ("CaCO3",   "Sal",     "formula-classificacao"),
-        ("Sal",     "CO2",     "classificacao-formula"),  # ponte intencional p/ óxido
-        ("CO2",     "Óxido",   "formula-classificacao"),
-        ("Óxido",   "Na2O",    "classificacao-formula"),
-        ("Na2O",    "Óxido",   "formula-classificacao"),
-        ("Óxido",   "HCl",     "classificacao-formula"),  # fecha o ciclo
-    ]
-
-    # ----- MÉDIO: associação por nome ↔ fórmula -----
-    medios = [
-        ("HCl",                  "Ácido Clorídrico", "formula-nome"),
-        ("Ácido Clorídrico",     "H2SO4",            "nome-formula"),
-        ("H2SO4",                "Ácido Sulfúrico",  "formula-nome"),
-        ("Ácido Sulfúrico",      "HNO3",             "nome-formula"),
-        ("HNO3",                 "Ácido Nítrico",    "formula-nome"),
-        ("Ácido Nítrico",        "NaOH",             "nome-formula"),
-        ("NaOH",                 "Hidróxido de Sódio","formula-nome"),
-        ("Hidróxido de Sódio",   "KOH",              "nome-formula"),
-        ("KOH",                  "Hidróxido de Potássio","formula-nome"),
-        ("Hidróxido de Potássio","NaCl",             "nome-formula"),
-        ("NaCl",                 "Cloreto de Sódio", "formula-nome"),
-        ("Cloreto de Sódio",     "CaCO3",            "nome-formula"),
-        ("CaCO3",                "Carbonato de Cálcio","formula-nome"),
-        ("Carbonato de Cálcio",  "CO2",              "nome-formula"),
-        ("CO2",                  "Dióxido de Carbono","formula-nome"),
-        ("Dióxido de Carbono",   "HCl",              "nome-formula"),
-    ]
-
-    # ----- DIFÍCIL: mistura nomes, fórmulas, propriedades e classificações -----
-    dificeis = [
-        ("HCl",                "Libera H+ em água", "formula-propriedade"),
-        ("Libera H+ em água",  "Ácido",             "propriedade-classificacao"),
-        ("Ácido",              "Ácido Sulfúrico",   "classificacao-nome"),
-        ("Ácido Sulfúrico",    "H2SO4",             "nome-formula"),
-        ("H2SO4",              "pH < 7",            "formula-propriedade"),
-        ("pH < 7",             "HNO3",              "propriedade-formula"),
-        ("HNO3",               "Ácido Nítrico",     "formula-nome"),
-        ("Ácido Nítrico",      "NaOH",              "nome-formula"),
-        ("NaOH",               "Libera OH- em água","formula-propriedade"),
-        ("Libera OH- em água", "Base",              "propriedade-classificacao"),
-        ("Base",               "Hidróxido de Potássio","classificacao-nome"),
-        ("Hidróxido de Potássio","KOH",             "nome-formula"),
-        ("KOH",                "pH > 7",            "formula-propriedade"),
-        ("pH > 7",             "Ca(OH)2",           "propriedade-formula"),
-        ("Ca(OH)2",            "Hidróxido de Cálcio","formula-nome"),
-        ("Hidróxido de Cálcio","NaCl",              "nome-formula"),
-        ("NaCl",               "Composto iônico",   "formula-propriedade"),
-        ("Composto iônico",    "Sal",               "propriedade-classificacao"),
-        ("Sal",                "Carbonato de Cálcio","classificacao-nome"),
-        ("Carbonato de Cálcio","CO2",               "nome-formula"),
-        ("CO2",                "Óxido ácido",       "formula-propriedade"),
-        ("Óxido ácido",        "Óxido",             "propriedade-classificacao"),
-        ("Óxido",              "Na2O",              "classificacao-formula"),
-        ("Na2O",               "HCl",               "formula-formula"),
-    ]
-
-    for descricao, ordem, lote in [
-        ("Nível fácil",   1, faceis),
-        ("Nível médio",   2, medios),
-        ("Nível difícil", 3, dificeis),
-    ]:
+def _seed_pecas(c):
+    """Popula as peças do dominó de funções inorgânicas (todos os níveis)."""
+    for ordem, repres in REPRESENTACOES.items():
         id_nivel = c.execute(
             "SELECT id_nivel FROM nivel WHERE ordem = ?", (ordem,)
         ).fetchone()["id_nivel"]
         c.executemany(
-            "INSERT INTO peca (id_nivel, lado_a, lado_b, tipo_conexao) "
-            "VALUES (?, ?, ?, ?)",
-            [(id_nivel, a, b, t) for (a, b, t) in lote],
+            "INSERT INTO peca (id_nivel, lado_a, chave_a, lado_b, chave_b, "
+            "tipo_conexao) VALUES (?, ?, ?, ?, ?, ?)",
+            [(id_nivel, la, ka, lb, kb, t)
+             for (la, ka, lb, kb, t) in _gerar_pecas(repres)],
         )
 
 

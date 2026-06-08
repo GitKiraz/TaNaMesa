@@ -28,8 +28,10 @@ CREATE TABLE IF NOT EXISTS nivel (
 CREATE TABLE IF NOT EXISTS peca (
     id_peca      INT AUTO_INCREMENT PRIMARY KEY,
     id_nivel     INT NOT NULL,
-    lado_a       VARCHAR(100) NOT NULL,
-    lado_b       VARCHAR(100) NOT NULL,
+    lado_a       VARCHAR(100) NOT NULL,             -- representação exibida (metade A)
+    lado_b       VARCHAR(100) NOT NULL,             -- representação exibida (metade B)
+    chave_a      VARCHAR(20)  NOT NULL DEFAULT '',  -- função química p/ encaixe (metade A)
+    chave_b      VARCHAR(20)  NOT NULL DEFAULT '',  -- função química p/ encaixe (metade B)
     tipo_conexao VARCHAR(30)  NOT NULL,
     ativo        TINYINT NOT NULL DEFAULT 1,
     FOREIGN KEY (id_nivel) REFERENCES nivel(id_nivel)

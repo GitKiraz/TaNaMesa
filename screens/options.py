@@ -43,6 +43,10 @@ class OptionsScreen(AuthScreen):
         est = ESTILO.get(nivel["ordem"], ESTILO[1])
         card = ui.Card(parent, padx=26, pady=22)
 
+        # Espaçador invisível: fixa a MESMA largura para todos os cards,
+        # evitando que o nível de texto mais curto fique mais estreito.
+        tk.Frame(card.body, bg=SURFACE, width=220, height=1).pack()
+
         # Faixa accent + emoji difficulty marker
         topo = tk.Frame(card.body, bg=SURFACE)
         topo.pack(anchor="w", fill="x", pady=(0, 14))
@@ -54,8 +58,9 @@ class OptionsScreen(AuthScreen):
         tk.Label(card.body, text=nivel["descricao"], bg=SURFACE, fg=INK,
                  font=ui.font(16, "bold")).pack(anchor="w", pady=(2, 6))
         tk.Label(card.body, text=est["descricao"], bg=SURFACE, fg=MUTED,
-                 font=ui.font(10), wraplength=220,
-                 justify="left").pack(anchor="w", pady=(0, 16))
+                 font=ui.font(10), wraplength=220, justify="left",
+                 height=3, anchor="nw").pack(anchor="w", fill="x",
+                                             pady=(0, 16))
 
         ui.RoundedButton(card.body, "Começar partida",
                          command=self.nav("game", nivel),

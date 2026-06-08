@@ -3,7 +3,7 @@ import tkinter as tk
 
 import session
 import ui
-from constants import (BG, SURFACE, SOFT, TINT, RED, RED_DARK,
+from constants import (BG, SURFACE, SOFT, TINT, RED, RED_DARK, RED_SOFT,
                        INK, TEXT, MUTED, SUBTLE, LINE,
                        LABEL_FG, LINK_FG)
 
@@ -177,30 +177,40 @@ class _SidebarItem(tk.Frame):
         self._ativo = ativo
 
         self._bg_normal = SOFT
-        self._bg_hover  = TINT
+        self._bg_hover  = RED_SOFT
         self._bg_ativo  = RED
         self._fg_normal = TEXT
+        self._fg_hover  = RED_DARK
         self._fg_ativo  = "#ffffff"
+        self._current_bg = self._bg_ativo if ativo else self._bg_normal
 
         self._btn = tk.Canvas(self, width=200, height=40,
                               highlightthickness=0, bd=0, bg=SOFT)
         self._btn.pack(fill="x")
 
-        self._render(self._bg_ativo if ativo else self._bg_normal)
+        self._render(self._current_bg)
 
         self._btn.bind("<Enter>", self._on_enter)
         self._btn.bind("<Leave>", self._on_leave)
         self._btn.bind("<Button-1>", self._on_click)
+        self._btn.bind("<Configure>", lambda _e: self._render(self._current_bg))
         self._btn.configure(cursor="hand2")
 
     def _render(self, bg):
+        self._current_bg = bg
         self._btn.delete("all")
-        self._btn.update_idletasks()
-        w = self._btn.winfo_width() or 200
+        w = self._btn.winfo_width()
+        if w <= 1:                      # ainda não dimensionado pelo layout
+            w = int(self._btn.winfo_reqwidth())
         h = 40
         pts = ui.rounded_points(2, 2, w - 2, h - 2, 10)
         self._btn.create_polygon(pts, smooth=True, fill=bg, outline=bg)
-        fg = self._fg_ativo if self._ativo else self._fg_normal
+        if self._ativo:
+            fg = self._fg_ativo
+        elif bg == self._bg_hover:
+            fg = self._fg_hover
+        else:
+            fg = self._fg_normal
         self._btn.create_text(18, h // 2, text=self._label,
                               fill=fg, anchor="w",
                               font=ui.font(11, "bold"))
