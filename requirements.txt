@@ -1,5 +1,13 @@
-# TáNaMesa usa apenas bibliotecas da stdlib do Python (>= 3.10):
-#   tkinter (interface), sqlite3 (banco padrão), hashlib (hash de senha)
+# TáNaMesa — dependências
 #
-# Para usar MySQL em produção, conforme a documentação (seção 6.1):
-# mysql-connector-python>=8.3
+# Backend de banco PRIMÁRIO: MySQL server (requer o driver abaixo).
+mysql-connector-python>=8.3
+#
+# Interface e utilidades vêm da stdlib do Python (>= 3.10):
+#   tkinter (interface), sqlite3 (fallback de banco), hashlib (hash de senha)
+#
+# O SQLite é a SEGUNDA opção (fallback automático / zero-instalação):
+# se o MySQL não estiver acessível, o app cai para um arquivo local
+# `tanamesa.db`. Para forçar o backend use a env TANAMESA_DB=mysql|sqlite|
+# mysql-strict. Conexão MySQL via env: MYSQL_HOST, MYSQL_PORT, MYSQL_USER,
+# MYSQL_PASSWORD, MYSQL_DATABASE.

@@ -3,13 +3,13 @@ import tkinter as tk
 import session
 import ui
 from constants import BG, SURFACE, RED, INK, MUTED, TEXT
-from screens._base import AuthScreen
+from screens._base import TelaAutenticada
 
 
-class HomeScreen(AuthScreen):
+class TelaInicio(TelaAutenticada):
     ativo_sidebar = "Iniciar nova partida"
 
-    def _content(self, parent):
+    def _conteudo(self, parent):
         u = session.atual() or {}
 
         wrapper = tk.Frame(parent, bg=BG)
@@ -30,14 +30,14 @@ class HomeScreen(AuthScreen):
         grid = tk.Frame(wrapper, bg=BG)
         grid.pack(anchor="w")
 
-        self._action_card(grid, "Iniciar nova partida",
+        self._cartao_acao(grid, "Iniciar nova partida",
                           "Escolha um nível e comece a jogar dominó "
                           "de funções inorgânicas.",
                           accent=RED, cta="Jogar agora",
                           on_click=self.nav("options")).pack(
             side="left", padx=(0, 18))
 
-        self._action_card(grid, "Meu perfil",
+        self._cartao_acao(grid, "Meu perfil",
                           "Veja e edite suas informações de cadastro.",
                           accent="#1f2937", cta="Abrir perfil",
                           on_click=self.nav("profile")).pack(side="left")
@@ -55,7 +55,7 @@ class HomeScreen(AuthScreen):
                  bg=SURFACE, fg=TEXT, font=ui.font(11),
                  wraplength=560, justify="left").pack(anchor="w", pady=(4, 0))
 
-    def _action_card(self, parent, titulo, descricao,
+    def _cartao_acao(self, parent, titulo, descricao,
                      accent, cta, on_click):
         card = ui.Card(parent, padx=28, pady=24)
 

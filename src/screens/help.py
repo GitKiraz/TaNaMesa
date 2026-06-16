@@ -2,8 +2,8 @@ import tkinter as tk
 
 import ui
 from constants import BG, SURFACE, RED, INK, TEXT, MUTED, TINT
-from screens._base import AuthScreen
-from widgets import section_title
+from screens._base import TelaAutenticada
+from widgets import titulo_secao
 
 
 REGRAS = [
@@ -21,14 +21,14 @@ REGRAS = [
 ]
 
 
-class HelpScreen(AuthScreen):
+class TelaAjuda(TelaAutenticada):
     ativo_sidebar = "Ajuda"
 
-    def _content(self, parent):
+    def _conteudo(self, parent):
         wrapper = tk.Frame(parent, bg=BG)
         wrapper.pack(expand=True, fill="both", padx=48, pady=48)
 
-        section_title(wrapper, "Ajuda",
+        titulo_secao(wrapper, "Ajuda",
                       "Como funciona o TáNaMesa.")
 
         # Lista de regras como mini-cards
@@ -36,7 +36,7 @@ class HelpScreen(AuthScreen):
         lista.pack(fill="x", pady=(24, 0))
 
         for i, (titulo, corpo) in enumerate(REGRAS):
-            self._regra_card(lista, i + 1, titulo, corpo).pack(
+            self._cartao_regra(lista, i + 1, titulo, corpo).pack(
                 fill="x", pady=(0, 10))
 
         # Suporte
@@ -51,7 +51,7 @@ class HelpScreen(AuthScreen):
                  bg=SURFACE, fg=MUTED,
                  font=ui.font(10)).pack(anchor="w", pady=(4, 0))
 
-    def _regra_card(self, parent, n, titulo, corpo):
+    def _cartao_regra(self, parent, n, titulo, corpo):
         card = ui.Card(parent, padx=20, pady=16)
         row = tk.Frame(card.body, bg=SURFACE)
         row.pack(fill="x")

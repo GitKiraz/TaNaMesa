@@ -1,0 +1,31 @@
+# MySQL local para desenvolvimento/apresentação do TáNaMesa.
+#
+# Subir:   docker compose up -d
+# Parar:   docker compose down          (mantém os dados)
+# Zerar:   docker compose down -v       (apaga os dados do volume)
+#
+# Configurado para casar com os defaults do app (database.py):
+# host=localhost, port=3306, user=root, senha vazia, database=tanamesa.
+# Assim basta `python src/main.py` — sem precisar de variáveis de ambiente.
+
+services:
+  db:
+    image: mysql:8.4
+    container_name: tanamesa-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"   # root sem senha (apenas dev/local)
+      MYSQL_DATABASE: tanamesa
+    ports:
+      - "3306:3306"
+    volumes:
+      - tanamesa_mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 20s
+
+volumes:
+  tanamesa_mysql:

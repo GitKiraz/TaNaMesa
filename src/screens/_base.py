@@ -3,10 +3,10 @@ import tkinter as tk
 
 import session
 from constants import BG
-from widgets import make_sidebar
+from widgets import criar_barra_lateral
 
 
-def itens_sidebar(nav):
+def itens_barra_lateral(nav):
     """Itens padrão do menu lateral. Adapta para professor."""
     base = [
         ("Iniciar nova partida", nav("home")),
@@ -20,10 +20,10 @@ def itens_sidebar(nav):
     return base
 
 
-class AuthScreen(tk.Frame):
+class TelaAutenticada(tk.Frame):
     """
     Esqueleto de tela autenticada.
-    Subclasses implementam _content(parent) que recebe o frame da
+    Subclasses implementam _conteudo(parent) que recebe o frame da
     área central (conteúdo principal à direita da sidebar).
     """
     ativo_sidebar = None
@@ -36,14 +36,14 @@ class AuthScreen(tk.Frame):
         body = tk.Frame(self, bg=BG)
         body.pack(fill="both", expand=True)
 
-        make_sidebar(body, itens_sidebar(nav),
+        criar_barra_lateral(body, itens_barra_lateral(nav),
                      ativo=self.ativo_sidebar,
                      on_logout=on_logout)
 
         content = tk.Frame(body, bg=BG)
         content.pack(side="left", fill="both", expand=True)
 
-        self._content(content)
+        self._conteudo(content)
 
-    def _content(self, parent):
+    def _conteudo(self, parent):
         raise NotImplementedError

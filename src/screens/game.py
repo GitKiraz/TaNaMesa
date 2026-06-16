@@ -23,7 +23,7 @@ import ui
 from constants import (BG, SURFACE, RED, RED_DARK, INK, TEXT, MUTED,
                        LINE, TINT, HUD_BG, HUD_FG, HUD_ACCENT,
                        PIECE_VALID, PIECE_INVALID)
-from screens._base import AuthScreen
+from screens._base import TelaAutenticada
 
 
 PONTOS_ACERTO = 10
@@ -38,12 +38,12 @@ NOME_FUNCAO = {
 }
 
 
-class GameScreen(AuthScreen):
+class TelaJogo(TelaAutenticada):
     ativo_sidebar = None
 
     def __init__(self, master, nav, on_logout, nivel):
         self.nivel = nivel
-        self._cadeia      = []     # lista de slots (dict): ver _slot()
+        self._cadeia      = []     # lista de slots (dict): ver _posicao()
         self._mao         = []     # peças dict do banco
         self._selecionada = None   # id da peça selecionada
         self._pontuacao   = 0
@@ -58,7 +58,7 @@ class GameScreen(AuthScreen):
 
     # ---------------------------------------------------------- layout ----
 
-    def _content(self, parent):
+    def _conteudo(self, parent):
         u = session.atual()
         self._partida_id = db.iniciar_partida(u["id_usuario"],
                                               self.nivel["id_nivel"])
@@ -67,7 +67,7 @@ class GameScreen(AuthScreen):
         todas = db.carregar_pecas(self.nivel["id_nivel"])
         random.shuffle(todas)
         inicial = todas.pop(0)
-        self._cadeia.append(self._slot(inicial["lado_a"], inicial["chave_a"],
+        self._cadeia.append(self._posicao(inicial["lado_a"], inicial["chave_a"],
                                        inicial["lado_b"], inicial["chave_b"],
                                        inicial["id_peca"]))
         self._mao = todas[:TAMANHO_MAO]
@@ -91,9 +91,9 @@ class GameScreen(AuthScreen):
         # Direita: 3 boxes de métrica
         metr = tk.Frame(hud, bg=HUD_BG)
         metr.pack(side="right", padx=22, pady=10)
-        self._lbl_tempo  = self._hud_box(metr, "TEMPO",     "00:00")
-        self._lbl_pontos = self._hud_box(metr, "PONTUAÇÃO", "00")
-        self._lbl_erros  = self._hud_box(metr, "ERROS",     "00")
+        self._lbl_tempo  = self._caixa_hud(metr, "TEMPO",     "00:00")
+        self._lbl_pontos = self._caixa_hud(metr, "PONTUAÇÃO", "00")
+        self._lbl_erros  = self._caixa_hud(metr, "ERROS",     "00")
 
         # --- Instrução ---
         info = tk.Label(parent,
@@ -148,15 +148,15 @@ class GameScreen(AuthScreen):
         self._mao_frame.pack(fill="x")
 
         # Re-layout no resize
-        parent.bind("<Configure>", self._on_resize)
+        parent.bind("<Configure>", self._ao_redimensionar)
 
-        self._render_tabuleiro()
-        self._render_mao()
-        self._tick()
+        self._renderizar_tabuleiro()
+        self._renderizar_mao()
+        self._cronometrar()
 
     # ---------------------------------------------------------- HUD ----
 
-    def _hud_box(self, parent, titulo, valor):
+    def _caixa_hud(self, parent, titulo, valor):
         box = tk.Frame(parent, bg=HUD_BG, padx=18)
         box.pack(side="left")
         tk.Label(box, text=titulo, bg=HUD_BG, fg=HUD_ACCENT,
@@ -168,17 +168,17 @@ class GameScreen(AuthScreen):
 
     # ---------------------------------------------------- render fluído --
 
-    def _on_resize(self, _event=None):
+    def _ao_redimensionar(self, _event=None):
         if self._resize_job:
             self.after_cancel(self._resize_job)
-        self._resize_job = self.after(80, self._relayout)
+        self._resize_job = self.after(80, self._refazer_layout)
 
-    def _relayout(self):
+    def _refazer_layout(self):
         self._resize_job = None
         if self._encerrada:
             return
-        self._render_tabuleiro()
-        self._render_mao()
+        self._renderizar_tabuleiro()
+        self._renderizar_mao()
 
     def _por_linha(self, container):
         container.update_idletasks()
@@ -187,7 +187,7 @@ class GameScreen(AuthScreen):
             largura = self.winfo_width() - 300
         return max(1, largura // LARGURA_PECA)
 
-    def _render_grade(self, container, itens, draw_fn):
+    def _renderizar_grade(self, container, itens, desenhar_fn):
         for w in container.winfo_children():
             w.destroy()
         if not itens:
@@ -198,16 +198,16 @@ class GameScreen(AuthScreen):
             if i % por_linha == 0:
                 linha = tk.Frame(container, bg=container.cget("bg"))
                 linha.pack(anchor="center", pady=4)
-            draw_fn(linha, item)
+            desenhar_fn(linha, item)
 
-    def _render_tabuleiro(self):
-        def draw(parent, slot):
+    def _renderizar_tabuleiro(self):
+        def desenhar(parent, slot):
             ui.RoundedPiece(parent, slot["da"], slot["db"],
                             parent_bg=parent.cget("bg")
                             ).pack(side="left", padx=6, pady=4)
-        self._render_grade(self._tabuleiro_frame, self._cadeia, draw)
+        self._renderizar_grade(self._tabuleiro_frame, self._cadeia, desenhar)
 
-    def _render_mao(self):
+    def _renderizar_mao(self):
         if hasattr(self, "_lbl_qtd"):
             self._lbl_qtd.config(text=f"{len(self._mao)} peça(s)")
 
@@ -219,7 +219,7 @@ class GameScreen(AuthScreen):
                      font=ui.font(10, "normal")).pack(pady=10)
             return
 
-        def draw(parent, peca):
+        def desenhar(parent, peca):
             sel = (peca["id_peca"] == self._selecionada)
             ui.RoundedPiece(parent, peca["lado_a"], peca["lado_b"],
                             parent_bg=parent.cget("bg"),
@@ -227,16 +227,16 @@ class GameScreen(AuthScreen):
                             on_click=lambda i=peca["id_peca"]:
                                 self._selecionar(i)
                             ).pack(side="left", padx=6, pady=4)
-        self._render_grade(self._mao_frame, self._mao, draw)
+        self._renderizar_grade(self._mao_frame, self._mao, desenhar)
 
     def _selecionar(self, id_peca):
         self._selecionada = id_peca if self._selecionada != id_peca else None
-        self._render_mao()
+        self._renderizar_mao()
 
     # ---------------------------------------------------------- regras ----
 
     @staticmethod
-    def _slot(da, ka, db, kb, id_peca):
+    def _posicao(da, ka, db, kb, id_peca):
         """Uma peça posicionada no tabuleiro: textos (da/db) + funções (ka/kb)."""
         return {"da": da, "ka": ka, "db": db, "kb": kb, "id": id_peca}
 
@@ -266,19 +266,19 @@ class GameScreen(AuthScreen):
             nome = NOME_FUNCAO.get(funcao, funcao)
             db.registrar_jogada(self._partida_id, peca["id_peca"],
                                 True, f"encaixe válido ({nome})")
-            self._flash(PIECE_VALID, f"✓ {nome.capitalize()}!  +10 pts")
+            self._aviso(PIECE_VALID, f"✓ {nome.capitalize()}!  +10 pts")
         else:
             self._erros     += 1
             self._pontuacao += PONTOS_ERRO
             db.registrar_jogada(self._partida_id, peca["id_peca"],
                                 False, "encaixe inválido")
-            self._flash(PIECE_INVALID,
+            self._aviso(PIECE_INVALID,
                         "✗ Função diferente — " + self._dica_pontas())
 
         self._selecionada = None
         self._atualizar_hud()
-        self._render_tabuleiro()
-        self._render_mao()
+        self._renderizar_tabuleiro()
+        self._renderizar_mao()
         self._checar_fim()
 
     def _encaixar(self, peca, lado):
@@ -289,18 +289,18 @@ class GameScreen(AuthScreen):
         if lado == "dir":
             exposto = self._cadeia[-1]["kb"]
             if ka == exposto:                       # metade A encosta na ponta
-                self._cadeia.append(self._slot(da, ka, db, kb, pid))
+                self._cadeia.append(self._posicao(da, ka, db, kb, pid))
                 return exposto
             if kb == exposto:                       # gira: metade B encosta
-                self._cadeia.append(self._slot(db, kb, da, ka, pid))
+                self._cadeia.append(self._posicao(db, kb, da, ka, pid))
                 return exposto
         else:
             exposto = self._cadeia[0]["ka"]
             if kb == exposto:                       # metade B encosta na ponta
-                self._cadeia.insert(0, self._slot(da, ka, db, kb, pid))
+                self._cadeia.insert(0, self._posicao(da, ka, db, kb, pid))
                 return exposto
             if ka == exposto:                       # gira: metade A encosta
-                self._cadeia.insert(0, self._slot(db, kb, da, ka, pid))
+                self._cadeia.insert(0, self._posicao(db, kb, da, ka, pid))
                 return exposto
         return None
 
@@ -337,7 +337,7 @@ class GameScreen(AuthScreen):
     def _checar_fim(self):
         if not self._mao:
             self._pontuacao += BONUS_MAO_VAZIA
-            self._flash(PIECE_VALID, f"🏆 Mão zerada!  +{BONUS_MAO_VAZIA} bônus")
+            self._aviso(PIECE_VALID, f"🏆 Mão zerada!  +{BONUS_MAO_VAZIA} bônus")
             self._atualizar_hud()
             self._encerrar(motivo=f"mão esvaziada — vitória! (+{BONUS_MAO_VAZIA} bônus)")
         elif not self._ha_jogada_possivel():
@@ -361,31 +361,31 @@ class GameScreen(AuthScreen):
             f"Pontuação: {self._pontuacao}\n"
             f"Acertos:   {self._acertos}\n"
             f"Erros:     {self._erros}\n"
-            f"Tempo:     {self._fmt_tempo(self._tempo_seg)}"
+            f"Tempo:     {self._formatar_tempo(self._tempo_seg)}"
         )
         self.nav("home")()
 
     # ---------------------------------------------------------- timer ----
 
-    def _tick(self):
+    def _cronometrar(self):
         if self._encerrada:
             return
         self._tempo_seg += 1
         self._atualizar_hud()
-        self._timer_job = self.after(1000, self._tick)
+        self._timer_job = self.after(1000, self._cronometrar)
 
     def _atualizar_hud(self):
-        self._lbl_tempo.config(text=self._fmt_tempo(self._tempo_seg))
+        self._lbl_tempo.config(text=self._formatar_tempo(self._tempo_seg))
         self._lbl_pontos.config(text=f"{max(self._pontuacao, 0):02d}")
         self._lbl_erros.config(text=f"{self._erros:02d}")
 
     @staticmethod
-    def _fmt_tempo(seg):
+    def _formatar_tempo(seg):
         return f"{seg // 60:02d}:{seg % 60:02d}"
 
     # ---------------------------------------------------------- feedback -
 
-    def _flash(self, cor, msg):
+    def _aviso(self, cor, msg):
         bar = tk.Toplevel(self)
         bar.overrideredirect(True)
         bar.configure(bg=cor)

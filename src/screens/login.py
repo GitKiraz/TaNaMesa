@@ -5,19 +5,19 @@ import database as db
 import session
 import ui
 from constants import BG, SURFACE, RED, INK, MUTED, TEXT, LINK
-from widgets import (make_topbar, entry_field, tipo_usuario,
-                     action_button, link_label)
+from widgets import (criar_barra_topo, campo_entrada, tipo_usuario,
+                     botao_acao, rotulo_link)
 
 
-class LoginScreen(tk.Frame):
+class TelaLogin(tk.Frame):
     def __init__(self, master, switch_to_register, on_success):
         super().__init__(master, bg=BG)
         self.switch = switch_to_register
         self.on_success = on_success
-        self._build()
+        self._construir()
 
-    def _build(self):
-        make_topbar(self)
+    def _construir(self):
+        criar_barra_topo(self)
 
         wrapper = tk.Frame(self, bg=BG)
         wrapper.pack(expand=True, fill="both")
@@ -33,8 +33,8 @@ class LoginScreen(tk.Frame):
                  bg=SURFACE, fg=MUTED,
                  font=ui.font(11)).pack(anchor="w", pady=(0, 12))
 
-        self.email = entry_field(body, "Email")
-        self.senha = entry_field(body, "Senha", show="•")
+        self.email = campo_entrada(body, "Email")
+        self.senha = campo_entrada(body, "Senha", show="•")
 
         tk.Label(body, text="Esqueci minha senha", bg=SURFACE,
                  fg=LINK, font=ui.font(9, "bold"),
@@ -42,13 +42,13 @@ class LoginScreen(tk.Frame):
 
         self.tipo = tipo_usuario(body)
 
-        action_button(body, "Entrar", self._entrar)
+        botao_acao(body, "Entrar", self._entrar)
 
         rodape = tk.Frame(body, bg=SURFACE)
         rodape.pack(pady=(14, 0))
         tk.Label(rodape, text="Não possui cadastro? ", bg=SURFACE,
                  fg=TEXT, font=ui.font(10)).pack(side="left")
-        link_label(rodape, "Cadastre-se", self.switch)
+        rotulo_link(rodape, "Cadastre-se", self.switch)
 
     def _entrar(self):
         email = self.email.get().strip()

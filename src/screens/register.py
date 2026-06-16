@@ -5,18 +5,18 @@ from tkinter import messagebox
 import database as db
 import ui
 from constants import BG, SURFACE, INK, MUTED, TEXT
-from widgets import (make_topbar, entry_field, tipo_usuario,
-                     action_button, link_label)
+from widgets import (criar_barra_topo, campo_entrada, tipo_usuario,
+                     botao_acao, rotulo_link)
 
 
-class RegisterScreen(tk.Frame):
+class TelaCadastro(tk.Frame):
     def __init__(self, master, switch_to_login):
         super().__init__(master, bg=BG)
         self.switch = switch_to_login
-        self._build()
+        self._construir()
 
-    def _build(self):
-        make_topbar(self)
+    def _construir(self):
+        criar_barra_topo(self)
 
         wrapper = tk.Frame(self, bg=BG)
         wrapper.pack(expand=True, fill="both")
@@ -31,22 +31,22 @@ class RegisterScreen(tk.Frame):
                  bg=SURFACE, fg=MUTED,
                  font=ui.font(11)).pack(anchor="w", pady=(0, 6))
 
-        self.nome     = entry_field(body, "Nome")
-        self.nickname = entry_field(body, "Nickname")
-        self.email    = entry_field(body, "Email")
-        self.senha    = entry_field(body, "Senha (mín. 8 caracteres)",
+        self.nome     = campo_entrada(body, "Nome")
+        self.nickname = campo_entrada(body, "Nickname")
+        self.email    = campo_entrada(body, "Email")
+        self.senha    = campo_entrada(body, "Senha (mín. 8 caracteres)",
                                     show="•")
-        self.confirm  = entry_field(body, "Confirmar senha", show="•")
+        self.confirm  = campo_entrada(body, "Confirmar senha", show="•")
 
         self.tipo = tipo_usuario(body)
 
-        action_button(body, "Cadastrar", self._cadastrar)
+        botao_acao(body, "Cadastrar", self._cadastrar)
 
         rodape = tk.Frame(body, bg=SURFACE)
         rodape.pack(pady=(14, 0))
         tk.Label(rodape, text="Já possui cadastro? ", bg=SURFACE,
                  fg=TEXT, font=ui.font(10)).pack(side="left")
-        link_label(rodape, "Faça login", self.switch)
+        rotulo_link(rodape, "Faça login", self.switch)
 
     def _cadastrar(self):
         campos = {

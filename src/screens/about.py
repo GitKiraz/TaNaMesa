@@ -2,8 +2,8 @@ import tkinter as tk
 
 import ui
 from constants import BG, SURFACE, RED, INK, TEXT, MUTED, TINT
-from screens._base import AuthScreen
-from widgets import section_title
+from screens._base import TelaAutenticada
+from widgets import titulo_secao
 
 
 TIME = [
@@ -12,14 +12,14 @@ TIME = [
 ]
 
 
-class AboutScreen(AuthScreen):
+class TelaSobre(TelaAutenticada):
     ativo_sidebar = "Sobre"
 
-    def _content(self, parent):
+    def _conteudo(self, parent):
         wrapper = tk.Frame(parent, bg=BG)
         wrapper.pack(expand=True, fill="both", padx=48, pady=48)
 
-        section_title(wrapper, "Sobre o TáNaMesa",
+        titulo_secao(wrapper, "Sobre o TáNaMesa",
                       "Projeto acadêmico sem fins lucrativos.")
 
         # Card de descrição

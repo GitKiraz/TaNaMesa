@@ -6,21 +6,21 @@ import session
 import ui
 from constants import (BG, SURFACE, RED, RED_DARK, INK, TEXT, MUTED,
                        LINE)
-from screens._base import AuthScreen
-from widgets import section_title
+from screens._base import TelaAutenticada
+from widgets import titulo_secao
 
 
-class ProfileScreen(AuthScreen):
+class TelaPerfil(TelaAutenticada):
     ativo_sidebar = "Perfil"
 
-    def _content(self, parent):
+    def _conteudo(self, parent):
         u = session.atual() or {}
         self._editando = False
 
         wrapper = tk.Frame(parent, bg=BG)
         wrapper.pack(expand=True, fill="both", padx=48, pady=48)
 
-        section_title(wrapper, "Meu perfil",
+        titulo_secao(wrapper, "Meu perfil",
                       "Visualize e edite suas informações de cadastro.")
 
         # Card principal com avatar + dados
@@ -84,7 +84,7 @@ class ProfileScreen(AuthScreen):
 
     def _aplicar_modo(self):
         for key, entry in self.campos.items():
-            entry.config_state("normal" if self._editando else "readonly")
+            entry.definir_estado("normal" if self._editando else "readonly")
 
     def _editar(self):
         self._editando = True

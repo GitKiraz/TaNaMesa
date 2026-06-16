@@ -1,6 +1,6 @@
 """
-Componentes visuais modernos baseados em Canvas — suportam cantos
-arredondados, hover e estados visuais que o Tk padrão não oferece.
+Componentes visuais modernos baseados na nossa Prototipagem, para uso em toda a aplicação.
+Todos os componentes herdam de tk.Canvas ou tk.Frame
 """
 import tkinter as tk
 import tkinter.font as tkfont
@@ -36,7 +36,7 @@ def font(size, weight="normal"):
 
 # ------------------------------------------------------ geometria base ----
 
-def rounded_points(x1, y1, x2, y2, r):
+def pontos_arredondados(x1, y1, x2, y2, r):
     """Polígono que aproxima um retângulo arredondado (raio `r`)."""
     return [
         x1 + r, y1, x2 - r, y1, x2, y1,
@@ -46,7 +46,7 @@ def rounded_points(x1, y1, x2, y2, r):
     ]
 
 
-def _parent_bg(parent):
+def _bg_pai(parent):
     try:
         return parent.cget("bg")
     except Exception:
@@ -68,11 +68,11 @@ class RoundedButton(tk.Canvas):
                  size=12, weight="bold",
                  min_width=None, parent_bg=None):
         if parent_bg is None:
-            parent_bg = _parent_bg(parent)
+            parent_bg = _bg_pai(parent)
         if hover_bg is None:
-            hover_bg = _shade(bg, -0.10)
+            hover_bg = _tonalizar(bg, -0.10)
         if active_bg is None:
-            active_bg = _shade(bg, -0.18)
+            active_bg = _tonalizar(bg, -0.18)
 
         self._text = text
         self._command = command
@@ -97,48 +97,48 @@ class RoundedButton(tk.Canvas):
         super().__init__(parent, width=w, height=h,
                          highlightthickness=0, bd=0, bg=parent_bg)
 
-        self._render(bg)
+        self._renderizar(bg)
 
-        self.bind("<Enter>",        lambda _e: self._on_enter())
-        self.bind("<Leave>",        lambda _e: self._on_leave())
-        self.bind("<ButtonPress-1>", lambda _e: self._on_press())
-        self.bind("<ButtonRelease-1>", lambda _e: self._on_release())
+        self.bind("<Enter>",        lambda _e: self._ao_entrar())
+        self.bind("<Leave>",        lambda _e: self._ao_sair())
+        self.bind("<ButtonPress-1>", lambda _e: self._ao_pressionar())
+        self.bind("<ButtonRelease-1>", lambda _e: self._ao_soltar())
         self.configure(cursor="hand2")
 
-    def _render(self, fill):
+    def _renderizar(self, fill):
         self._current_bg = fill
         self.delete("all")
         w = int(self.winfo_reqwidth())
         h = int(self.winfo_reqheight())
-        pts = rounded_points(1, 1, w - 1, h - 1, self._radius)
+        pts = pontos_arredondados(1, 1, w - 1, h - 1, self._radius)
         self.create_polygon(pts, smooth=True, fill=fill, outline=fill)
         fg = self._fg if self._enabled else "#9ca3af"
         self.create_text(w // 2, h // 2, text=self._text,
                          fill=fg, font=self._font)
 
-    def _on_enter(self):
+    def _ao_entrar(self):
         if self._enabled:
-            self._render(self._hover)
+            self._renderizar(self._hover)
 
-    def _on_leave(self):
+    def _ao_sair(self):
         if self._enabled:
-            self._render(self._bg)
+            self._renderizar(self._bg)
 
-    def _on_press(self):
+    def _ao_pressionar(self):
         if self._enabled:
-            self._render(self._active)
+            self._renderizar(self._active)
 
-    def _on_release(self):
+    def _ao_soltar(self):
         if not self._enabled:
             return
-        self._render(self._hover)
+        self._renderizar(self._hover)
         if self._command:
             self._command()
 
-    def set_enabled(self, enabled: bool):
+    def definir_habilitado(self, enabled: bool):
         self._enabled = enabled
         self.configure(cursor="hand2" if enabled else "arrow")
-        self._render(self._bg if enabled else _shade(self._bg, 0.30))
+        self._renderizar(self._bg if enabled else _tonalizar(self._bg, 0.30))
 
 
 # -------------------------------------------------------- GhostButton ----
@@ -151,20 +151,20 @@ class GhostButton(RoundedButton):
                  hover_bg="#f3f4f6", radius=10,
                  padx=20, pady=10, size=11, weight="bold",
                  parent_bg=None):
-        self._border = border  # set ANTES do super().__init__ que chama _render
+        self._border = border  # set ANTES do super().__init__ que chama _renderizar
         super().__init__(parent, text, command,
-                         bg=parent_bg or _parent_bg(parent),
+                         bg=parent_bg or _bg_pai(parent),
                          fg=fg, hover_bg=hover_bg,
-                         active_bg=_shade(hover_bg, -0.05),
+                         active_bg=_tonalizar(hover_bg, -0.05),
                          radius=radius, padx=padx, pady=pady,
                          size=size, weight=weight, parent_bg=parent_bg)
 
-    def _render(self, fill):
+    def _renderizar(self, fill):
         self._current_bg = fill
         self.delete("all")
         w = int(self.winfo_reqwidth())
         h = int(self.winfo_reqheight())
-        pts = rounded_points(1, 1, w - 1, h - 1, self._radius)
+        pts = pontos_arredondados(1, 1, w - 1, h - 1, self._radius)
         self.create_polygon(pts, smooth=True, fill=fill,
                             outline=self._border)
         self.create_text(w // 2, h // 2, text=self._text,
@@ -176,12 +176,11 @@ class GhostButton(RoundedButton):
 class Card(tk.Frame):
     """
     Cartão visual: fundo claro + borda fina + sombra sutil simulada.
-    Use `card.body` como container para o conteúdo.
     """
 
     def __init__(self, parent, *, bg="#ffffff", border="#e5e7eb",
                  padx=28, pady=24, shadow="#eceae6"):
-        parent_bg = _parent_bg(parent)
+        parent_bg = _bg_pai(parent)
         super().__init__(parent, bg=parent_bg)
 
         # "Sombra": faixa 3px na base que cria sensação de profundidade.
@@ -213,39 +212,39 @@ class RoundedPiece(tk.Canvas):
                  bg="#ffffff", ink="#111827", border="#e5e7eb",
                  selected_border="#dc2626", radius=14):
         if parent_bg is None:
-            parent_bg = _parent_bg(parent)
+            parent_bg = _bg_pai(parent)
 
         super().__init__(parent, width=self.W, height=self.H,
                          highlightthickness=0, bd=0, bg=parent_bg)
         self._lado_a = lado_a
         self._lado_b = lado_b
-        self._on_click = on_click
+        self._ao_clicar = on_click
         self._bg = bg
         self._ink = ink
         self._border = border
         self._sel_border = selected_border
         self._radius = radius
         self._selected = selected
-        self._render()
+        self._renderizar()
 
         if on_click is not None:
             self.bind("<Button-1>", lambda _e: on_click())
-            self.bind("<Enter>", lambda _e: self._render(hover=True))
-            self.bind("<Leave>", lambda _e: self._render())
+            self.bind("<Enter>", lambda _e: self._renderizar(hover=True))
+            self.bind("<Leave>", lambda _e: self._renderizar())
             self.configure(cursor="hand2")
 
-    def _render(self, hover=False):
+    def _renderizar(self, hover=False):
         self.delete("all")
         w, h = self.W, self.H
 
         # Borda externa (mais grossa se selecionada)
         border_w = 3 if self._selected else 1
         border_color = self._sel_border if self._selected else self._border
-        pts = rounded_points(1, 1, w - 1, h - 1, self._radius)
+        pts = pontos_arredondados(1, 1, w - 1, h - 1, self._radius)
         self.create_polygon(pts, smooth=True, fill=self._bg,
                             outline=border_color, width=border_w)
 
-        # Levíssimo highlight no hover
+        # Highlight no hover
         if hover and not self._selected:
             self.create_polygon(pts, smooth=True, fill="",
                                 outline="#fca5a5", width=2)
@@ -263,9 +262,9 @@ class RoundedPiece(tk.Canvas):
         self.create_text(3 * w // 4, h // 2, text=self._lado_b, fill=self._ink,
                          font=text_font, width=max_w, justify="center")
 
-    def set_selected(self, sel: bool):
+    def definir_selecionado(self, sel: bool):
         self._selected = sel
-        self._render()
+        self._renderizar()
 
 
 # --------------------------------------------------------------- Avatar --
@@ -276,7 +275,7 @@ class Avatar(tk.Canvas):
     def __init__(self, parent, nome, *, size=44,
                  bg="#dc2626", fg="#ffffff", parent_bg=None):
         if parent_bg is None:
-            parent_bg = _parent_bg(parent)
+            parent_bg = _bg_pai(parent)
         super().__init__(parent, width=size, height=size,
                          highlightthickness=0, bd=0, bg=parent_bg)
         iniciais = "".join(p[0] for p in (nome or "?").split()[:2]).upper() or "?"
@@ -297,7 +296,7 @@ class ModernEntry(tk.Frame):
                  bg_inner="#ffffff", border="#e5e7eb",
                  focus_border="#dc2626", parent_bg=None):
         if parent_bg is None:
-            parent_bg = _parent_bg(parent)
+            parent_bg = _bg_pai(parent)
         super().__init__(parent, bg=border, padx=1, pady=1)
         self._border = border
         self._focus_border = focus_border
@@ -324,13 +323,13 @@ class ModernEntry(tk.Frame):
     def delete(self, *a, **kw): self.entry.delete(*a, **kw)
     def insert(self, *a, **kw): self.entry.insert(*a, **kw)
     def focus_set(self):  self.entry.focus_set()
-    def config_state(self, state):
+    def definir_estado(self, state):
         self.entry.configure(state=state)
 
 
 # -------------------------------------------------------------- utils --
 
-def _shade(hex_color, factor):
+def _tonalizar(hex_color, factor):
     """Clareia (factor>0) ou escurece (factor<0) uma cor hex."""
     hex_color = hex_color.lstrip("#")
     r, g, b = int(hex_color[0:2], 16), int(hex_color[2:4], 16), int(hex_color[4:6], 16)

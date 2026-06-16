@@ -10,8 +10,8 @@ from constants import (BG, SURFACE, SOFT, TINT, RED, RED_DARK, RED_SOFT,
 
 # ---------------------------------------------------------- Top bar ----
 
-def make_topbar(parent, hint_text="", on_logout=None):
-    """Barra superior usada nas telas SEM sidebar (login/cadastro)."""
+def criar_barra_topo(parent, hint_text="", on_logout=None):
+    """Barra superior usada nas telas sem sidebar (login/cadastro)."""
     bar = tk.Frame(parent, bg=BG)
     bar.pack(side="top", fill="x", padx=24, pady=16)
 
@@ -35,7 +35,7 @@ def make_topbar(parent, hint_text="", on_logout=None):
 
 # ----------------------------------------------------------- Form fields --
 
-def entry_field(parent, label_text, show="", initial=""):
+def campo_entrada(parent, label_text, show="", initial=""):
     """Label estilizado + ModernEntry."""
     tk.Label(parent, text=label_text, bg=parent.cget("bg"),
              fg=TEXT, font=ui.font(10, "bold")).pack(
@@ -59,21 +59,21 @@ def tipo_usuario(parent, initial=""):
 
     chips = {}
 
-    def select(valor):
+    def selecionar(valor):
         var.set(valor)
         for v, chip in chips.items():
-            chip.set_selected(v == valor)
+            chip.definir_selecionado(v == valor)
 
     class Chip(ui.RoundedButton):
-        def set_selected(self, sel):
+        def definir_selecionado(self, sel):
             self._bg     = RED if sel else "#ffffff"
             self._hover  = RED_DARK if sel else TINT
-            self._active = ui._shade(self._bg, -0.15)
+            self._active = ui._tonalizar(self._bg, -0.15)
             self._fg     = "#ffffff" if sel else TEXT
-            self._render(self._bg)
+            self._renderizar(self._bg)
 
     for valor, rotulo in [("aluno", "Aluno"), ("professor", "Professor")]:
-        chip = Chip(row, rotulo, command=lambda v=valor: select(v),
+        chip = Chip(row, rotulo, command=lambda v=valor: selecionar(v),
                     bg="#ffffff", fg=TEXT, hover_bg=TINT,
                     radius=999, padx=22, pady=8, size=11,
                     parent_bg=parent_bg)
@@ -81,11 +81,11 @@ def tipo_usuario(parent, initial=""):
         chips[valor] = chip
 
     if initial in chips:
-        select(initial)
+        selecionar(initial)
     return var
 
 
-def action_button(parent, text, command, bg=RED, fg="#ffffff"):
+def botao_acao(parent, text, command, bg=RED, fg="#ffffff"):
     """Botão de ação primário (cantos arredondados, full-width)."""
     btn = ui.RoundedButton(parent, text, command=command,
                            bg=bg, fg=fg, radius=10,
@@ -94,7 +94,7 @@ def action_button(parent, text, command, bg=RED, fg="#ffffff"):
     return btn
 
 
-def link_label(parent, text, command):
+def rotulo_link(parent, text, command):
     """Texto clicável estilo link."""
     lbl = tk.Label(parent, text=text, bg=parent.cget("bg"),
                    fg=LINK_FG, font=ui.font(10, "bold"),
@@ -104,7 +104,7 @@ def link_label(parent, text, command):
     return lbl
 
 
-def section_title(parent, text, sub=""):
+def titulo_secao(parent, text, sub=""):
     """Título grande de seção, com subtítulo opcional."""
     parent_bg = parent.cget("bg")
     tk.Label(parent, text=text, bg=parent_bg, fg=INK,
@@ -116,7 +116,7 @@ def section_title(parent, text, sub=""):
 
 # ----------------------------------------------------------- Sidebar ----
 
-def make_sidebar(parent, items, ativo=None, on_logout=None):
+def criar_barra_lateral(parent, items, ativo=None, on_logout=None):
     """
     Sidebar moderna: logo + menu rolável + perfil/sair no rodapé.
     items: lista de (label, callback)
@@ -188,22 +188,22 @@ class _SidebarItem(tk.Frame):
                               highlightthickness=0, bd=0, bg=SOFT)
         self._btn.pack(fill="x")
 
-        self._render(self._current_bg)
+        self._renderizar(self._current_bg)
 
-        self._btn.bind("<Enter>", self._on_enter)
-        self._btn.bind("<Leave>", self._on_leave)
-        self._btn.bind("<Button-1>", self._on_click)
-        self._btn.bind("<Configure>", lambda _e: self._render(self._current_bg))
+        self._btn.bind("<Enter>", self._ao_entrar)
+        self._btn.bind("<Leave>", self._ao_sair)
+        self._btn.bind("<Button-1>", self._ao_clicar)
+        self._btn.bind("<Configure>", lambda _e: self._renderizar(self._current_bg))
         self._btn.configure(cursor="hand2")
 
-    def _render(self, bg):
+    def _renderizar(self, bg):
         self._current_bg = bg
         self._btn.delete("all")
         w = self._btn.winfo_width()
         if w <= 1:                      # ainda não dimensionado pelo layout
             w = int(self._btn.winfo_reqwidth())
         h = 40
-        pts = ui.rounded_points(2, 2, w - 2, h - 2, 10)
+        pts = ui.pontos_arredondados(2, 2, w - 2, h - 2, 10)
         self._btn.create_polygon(pts, smooth=True, fill=bg, outline=bg)
         if self._ativo:
             fg = self._fg_ativo
@@ -215,13 +215,13 @@ class _SidebarItem(tk.Frame):
                               fill=fg, anchor="w",
                               font=ui.font(11, "bold"))
 
-    def _on_enter(self, _):
+    def _ao_entrar(self, _):
         if not self._ativo:
-            self._render(self._bg_hover)
+            self._renderizar(self._bg_hover)
 
-    def _on_leave(self, _):
-        self._render(self._bg_ativo if self._ativo else self._bg_normal)
+    def _ao_sair(self, _):
+        self._renderizar(self._bg_ativo if self._ativo else self._bg_normal)
 
-    def _on_click(self, _):
+    def _ao_clicar(self, _):
         if self._cmd:
             self._cmd()

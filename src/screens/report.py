@@ -7,14 +7,14 @@ import session
 import ui
 from constants import (BG, SURFACE, RED, RED_DARK, INK, TEXT, MUTED,
                        LINE, LINE_SOFT, HUD_BG)
-from screens._base import AuthScreen
-from widgets import section_title
+from screens._base import TelaAutenticada
+from widgets import titulo_secao
 
 
-class ReportScreen(AuthScreen):
+class TelaRelatorios(TelaAutenticada):
     ativo_sidebar = "Relatórios"
 
-    def _content(self, parent):
+    def _conteudo(self, parent):
         if not session.eh_professor():
             tk.Label(parent, text="Acesso restrito a professores.",
                      bg=BG, fg=INK,
@@ -29,7 +29,7 @@ class ReportScreen(AuthScreen):
 
         col_t = tk.Frame(topo, bg=BG)
         col_t.pack(side="left", fill="x", expand=True)
-        section_title(col_t, "Relatórios",
+        titulo_secao(col_t, "Relatórios",
                       "Acompanhe o desempenho dos alunos.")
 
         ui.RoundedButton(topo, "Atualizar dados",
@@ -47,7 +47,7 @@ class ReportScreen(AuthScreen):
         tab_card.pack(fill="both", expand=True)
 
         # Estilo moderno do ttk
-        self._setup_treeview_style()
+        self._configurar_estilo_treeview()
 
         cols = ("aluno", "nickname", "nivel", "pontos",
                 "acertos", "erros", "tempo", "data")
@@ -75,7 +75,7 @@ class ReportScreen(AuthScreen):
 
         self._carregar()
 
-    def _setup_treeview_style(self):
+    def _configurar_estilo_treeview(self):
         style = ttk.Style()
         try:
             style.theme_use("clam")
@@ -101,7 +101,7 @@ class ReportScreen(AuthScreen):
                   background=[("selected", RED)],
                   foreground=[("selected", "#ffffff")])
 
-    def _stat(self, parent, titulo, valor):
+    def _estatistica(self, parent, titulo, valor):
         card = ui.Card(parent, padx=20, pady=16)
         tk.Label(card.body, text=titulo, bg=SURFACE, fg=MUTED,
                  font=ui.font(9, "bold")).pack(anchor="w")
@@ -121,13 +121,13 @@ class ReportScreen(AuthScreen):
         soma_ace = sum(d["acertos"]   for d in dados)
         soma_err = sum(d["erros"]     for d in dados)
 
-        self._stat(self._resumo, "Partidas",       total).pack(
+        self._estatistica(self._resumo, "Partidas",       total).pack(
             side="left", padx=(0, 12))
-        self._stat(self._resumo, "Pontos totais",  soma_pts).pack(
+        self._estatistica(self._resumo, "Pontos totais",  soma_pts).pack(
             side="left", padx=(0, 12))
-        self._stat(self._resumo, "Acertos totais", soma_ace).pack(
+        self._estatistica(self._resumo, "Acertos totais", soma_ace).pack(
             side="left", padx=(0, 12))
-        self._stat(self._resumo, "Erros totais",   soma_err).pack(
+        self._estatistica(self._resumo, "Erros totais",   soma_err).pack(
             side="left")
 
         # Tabela

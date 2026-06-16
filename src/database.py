@@ -1,8 +1,18 @@
 """
 Camada de acesso a dados do TáNaMesa.
 
-Por padrão usa SQLite (zero-instalação). A documentação prevê MySQL
-para produção — o schema equivalente está em `schema_mysql.sql`.
+Backend primário: MySQL server. O SQLite é a segunda opção — fallback
+automático e zero-instalação.
+
+Seleção pela variável de ambiente TANAMESA_DB:
+    - "mysql"  (padrão): tenta MySQL; se indisponível, cai para SQLite.
+    - "sqlite": força o SQLite local.
+    - "mysql-strict": exige MySQL e falha se ele não estiver acessível
+      (sem fallback) — recomendado em produção.
+
+Conexão MySQL por env (com defaults de desenvolvimento):
+    MYSQL_HOST (localhost), MYSQL_PORT (3306), MYSQL_USER (root),
+    MYSQL_PASSWORD (""), MYSQL_DATABASE (tanamesa).
 """
 import hashlib
 import os
@@ -10,10 +20,23 @@ import sqlite3
 from contextlib import contextmanager
 from datetime import datetime
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "tanamesa.db")
+# ------------------------------------------------------------ Configuração --
+DB_BACKEND = os.environ.get("TANAMESA_DB", "mysql").strip().lower()
+
+SQLITE_PATH = os.path.join(os.path.dirname(__file__), "tanamesa.db")
+
+MYSQL_CONFIG = {
+    "host":     os.environ.get("MYSQL_HOST", "localhost"),
+    "port":     int(os.environ.get("MYSQL_PORT", "3306")),
+    "user":     os.environ.get("MYSQL_USER", "root"),
+    "password": os.environ.get("MYSQL_PASSWORD", ""),
+    "database": os.environ.get("MYSQL_DATABASE", "tanamesa"),
+}
+
+_backend_ativo = None   # resolvido em runtime: "mysql" ou "sqlite"
 
 
-SCHEMA_SQL = """
+_SCHEMA_SQLITE = """
 CREATE TABLE IF NOT EXISTS usuario (
     id_usuario   INTEGER PRIMARY KEY AUTOINCREMENT,
     nome         TEXT    NOT NULL,
@@ -80,16 +103,174 @@ CREATE TABLE IF NOT EXISTS relatorio (
 """
 
 
+# Mesmo schema lógico do SQLite, com tipos do MySQL/InnoDB.
+_SCHEMA_MYSQL = """
+CREATE TABLE IF NOT EXISTS usuario (
+    id_usuario   INT AUTO_INCREMENT PRIMARY KEY,
+    nome         VARCHAR(100) NOT NULL,
+    email        VARCHAR(150) NOT NULL UNIQUE,
+    senha        VARCHAR(255) NOT NULL,
+    nickname     VARCHAR(50)  NOT NULL,
+    tipo_usuario ENUM('aluno','professor') NOT NULL,
+    criado_em    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS nivel (
+    id_nivel  INT AUTO_INCREMENT PRIMARY KEY,
+    descricao VARCHAR(50) NOT NULL,
+    ordem     INT NOT NULL,
+    ativo     TINYINT NOT NULL DEFAULT 1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS peca (
+    id_peca      INT AUTO_INCREMENT PRIMARY KEY,
+    id_nivel     INT NOT NULL,
+    lado_a       VARCHAR(100) NOT NULL,
+    lado_b       VARCHAR(100) NOT NULL,
+    chave_a      VARCHAR(20)  NOT NULL DEFAULT '',
+    chave_b      VARCHAR(20)  NOT NULL DEFAULT '',
+    tipo_conexao VARCHAR(30)  NOT NULL,
+    ativo        TINYINT NOT NULL DEFAULT 1,
+    FOREIGN KEY (id_nivel) REFERENCES nivel(id_nivel)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS partida (
+    id_partida     INT AUTO_INCREMENT PRIMARY KEY,
+    id_aluno       INT NOT NULL,
+    id_nivel       INT NOT NULL,
+    pontuacao      INT NOT NULL DEFAULT 0,
+    acertos        INT NOT NULL DEFAULT 0,
+    erros          INT NOT NULL DEFAULT 0,
+    tempo_segundos INT NOT NULL DEFAULT 0,
+    iniciada_em    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    encerrada_em   DATETIME NULL,
+    FOREIGN KEY (id_aluno) REFERENCES usuario(id_usuario),
+    FOREIGN KEY (id_nivel) REFERENCES nivel(id_nivel)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS jogada (
+    id_jogada  INT AUTO_INCREMENT PRIMARY KEY,
+    id_partida INT NOT NULL,
+    id_peca    INT NOT NULL,
+    acerto     TINYINT NOT NULL,
+    feedback   VARCHAR(255),
+    jogada_em  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_partida) REFERENCES partida(id_partida),
+    FOREIGN KEY (id_peca)    REFERENCES peca(id_peca)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS relatorio (
+    id_relatorio INT AUTO_INCREMENT PRIMARY KEY,
+    id_professor INT NOT NULL,
+    filtros      TEXT,
+    formato      VARCHAR(10),
+    arquivo_path TEXT,
+    gerado_em    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_professor) REFERENCES usuario(id_usuario)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+"""
+
+
+class _DB:
+    """
+    Wrapper fino sobre a conexão para unificar SQLite e MySQL:
+    - traduz o placeholder "?" para "%s" no MySQL;
+    - sempre devolve linhas como dicionários;
+    - oferece execute/executemany/executescript.
+    """
+
+    def __init__(self, raw, backend):
+        self._raw = raw
+        self.backend = backend
+
+    def _prep(self, sql):
+        return sql if self.backend == "sqlite" else sql.replace("?", "%s")
+
+    def _cursor(self):
+        if self.backend == "mysql":
+            return self._raw.cursor(dictionary=True, buffered=True)
+        return self._raw.cursor()
+
+    def execute(self, sql, params=()):
+        cur = self._cursor()
+        cur.execute(self._prep(sql), tuple(params))
+        return cur
+
+    def executemany(self, sql, seq):
+        cur = self._cursor()
+        cur.executemany(self._prep(sql), [tuple(x) for x in seq])
+        return cur
+
+    def executescript(self, script):
+        if self.backend == "sqlite":
+            self._raw.executescript(script)
+        else:
+            cur = self._raw.cursor()
+            for stmt in script.split(";"):
+                if stmt.strip():
+                    cur.execute(stmt)
+
+
+def _garantir_database_mysql():
+    """Cria a database no servidor MySQL caso ainda não exista."""
+    import mysql.connector
+    cfg = {k: v for k, v in MYSQL_CONFIG.items() if k != "database"}
+    srv = mysql.connector.connect(**cfg)
+    try:
+        srv.cursor().execute(
+            f"CREATE DATABASE IF NOT EXISTS `{MYSQL_CONFIG['database']}` "
+            "CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+        )
+        srv.commit()
+    finally:
+        srv.close()
+
+
+def _resolver_backend():
+    """Decide (uma vez) qual backend usar, com fallback para SQLite."""
+    global _backend_ativo
+    if _backend_ativo:
+        return _backend_ativo
+
+    if DB_BACKEND == "sqlite":
+        _backend_ativo = "sqlite"
+        return _backend_ativo
+
+    try:
+        import mysql.connector  # noqa: F401
+        _garantir_database_mysql()
+        mysql.connector.connect(**MYSQL_CONFIG).close()   # valida acesso
+        _backend_ativo = "mysql"
+    except Exception as e:
+        if DB_BACKEND == "mysql-strict":
+            raise RuntimeError(f"MySQL exigido mas inacessível: {e}") from e
+        print(f"[TáNaMesa] MySQL indisponível ({e}); usando SQLite local.")
+        _backend_ativo = "sqlite"
+    return _backend_ativo
+
+
+def backend_ativo():
+    """Backend efetivamente em uso ('mysql' ou 'sqlite')."""
+    return _resolver_backend()
+
+
 @contextmanager
 def conn():
-    c = sqlite3.connect(DB_PATH)
-    c.row_factory = sqlite3.Row
-    c.execute("PRAGMA foreign_keys = ON")
+    backend = _resolver_backend()
+    if backend == "mysql":
+        import mysql.connector
+        raw = mysql.connector.connect(**MYSQL_CONFIG)
+    else:
+        raw = sqlite3.connect(SQLITE_PATH)
+        raw.row_factory = sqlite3.Row
+        raw.execute("PRAGMA foreign_keys = ON")
+
+    c = _DB(raw, backend)
     try:
         yield c
-        c.commit()
+        raw.commit()
     finally:
-        c.close()
+        raw.close()
 
 
 def hash_senha(senha: str) -> str:
@@ -104,7 +285,8 @@ def init_db():
     apagar usuários nem o histórico de partidas/jogadas.
     """
     with conn() as c:
-        c.executescript(SCHEMA_SQL)
+        c.executescript(_SCHEMA_SQLITE if c.backend == "sqlite"
+                        else _SCHEMA_MYSQL)
         _migrar_colunas(c)
 
         if c.execute("SELECT COUNT(*) AS n FROM nivel").fetchone()["n"] == 0:
@@ -123,11 +305,16 @@ def init_db():
 
 def _migrar_colunas(c):
     """Adiciona colunas novas em bancos criados por versões anteriores."""
-    cols = {r["name"] for r in c.execute("PRAGMA table_info(peca)")}
+    if c.backend == "sqlite":
+        cols = {r["name"] for r in c.execute("PRAGMA table_info(peca)").fetchall()}
+        tipo = "TEXT"
+    else:
+        cols = {r["Field"] for r in c.execute("SHOW COLUMNS FROM peca").fetchall()}
+        tipo = "VARCHAR(20)"
     if "chave_a" not in cols:
-        c.execute("ALTER TABLE peca ADD COLUMN chave_a TEXT NOT NULL DEFAULT ''")
+        c.execute(f"ALTER TABLE peca ADD COLUMN chave_a {tipo} NOT NULL DEFAULT ''")
     if "chave_b" not in cols:
-        c.execute("ALTER TABLE peca ADD COLUMN chave_b TEXT NOT NULL DEFAULT ''")
+        c.execute(f"ALTER TABLE peca ADD COLUMN chave_b {tipo} NOT NULL DEFAULT ''")
 
 
 # ---------------------------------------------------------------- Usuário ---
@@ -219,7 +406,7 @@ def encerrar_partida(id_partida, pontuacao, acertos, erros, tempo_segundos):
             "UPDATE partida SET pontuacao=?, acertos=?, erros=?, "
             "tempo_segundos=?, encerrada_em=? WHERE id_partida=?",
             (pontuacao, acertos, erros, tempo_segundos,
-             datetime.now().isoformat(timespec="seconds"), id_partida),
+             datetime.now().strftime("%Y-%m-%d %H:%M:%S"), id_partida),
         )
 
 
@@ -341,4 +528,9 @@ def _seed_pecas(c):
 
 if __name__ == "__main__":
     init_db()
-    print(f"Banco inicializado em: {DB_PATH}")
+    if backend_ativo() == "mysql":
+        print(f"Banco inicializado (MySQL): "
+              f"{MYSQL_CONFIG['host']}:{MYSQL_CONFIG['port']}/"
+              f"{MYSQL_CONFIG['database']}")
+    else:
+        print(f"Banco inicializado (SQLite): {SQLITE_PATH}")

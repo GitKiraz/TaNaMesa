@@ -3,8 +3,8 @@ import tkinter as tk
 import database as db
 import ui
 from constants import BG, SURFACE, RED, INK, MUTED, TEXT
-from screens._base import AuthScreen
-from widgets import section_title
+from screens._base import TelaAutenticada
+from widgets import titulo_secao
 
 
 # Visual de cada nível
@@ -21,14 +21,14 @@ ESTILO = {
 }
 
 
-class OptionsScreen(AuthScreen):
+class TelaOpcoes(TelaAutenticada):
     ativo_sidebar = "Opções"
 
-    def _content(self, parent):
+    def _conteudo(self, parent):
         wrapper = tk.Frame(parent, bg=BG)
         wrapper.pack(expand=True, fill="both", padx=48, pady=48)
 
-        section_title(wrapper, "Escolha o nível",
+        titulo_secao(wrapper, "Escolha o nível",
                       "Cada nível tem uma forma diferente de associar "
                       "as peças.")
 
@@ -36,10 +36,10 @@ class OptionsScreen(AuthScreen):
         grid.pack(anchor="w", pady=(28, 0))
 
         for nv in db.listar_niveis():
-            self._card_nivel(grid, nv).pack(side="left", padx=(0, 18),
+            self._cartao_nivel(grid, nv).pack(side="left", padx=(0, 18),
                                             anchor="n")
 
-    def _card_nivel(self, parent, nivel):
+    def _cartao_nivel(self, parent, nivel):
         est = ESTILO.get(nivel["ordem"], ESTILO[1])
         card = ui.Card(parent, padx=26, pady=22)
 

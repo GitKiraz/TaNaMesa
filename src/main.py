@@ -4,12 +4,12 @@ import tkinter as tk
 import database as db
 import session
 from constants import BG
-from screens import (LoginScreen, RegisterScreen, HomeScreen, OptionsScreen,
-                     ProfileScreen, HelpScreen, AboutScreen, GameScreen,
-                     ReportScreen)
+from screens import (TelaLogin, TelaCadastro, TelaInicio, TelaOpcoes,
+                     TelaPerfil, TelaAjuda, TelaSobre, TelaJogo,
+                     TelaRelatorios)
 
 
-class App(tk.Tk):
+class Aplicativo(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("TáNaMesa")
@@ -20,45 +20,45 @@ class App(tk.Tk):
         db.init_db()
 
         self._current = None
-        self._show("login")
+        self._mostrar("login")
 
     # ---------- router ---------------------------------------------------
 
-    def _nav(self, screen, *args, **kwargs):
+    def _navegar(self, screen, *args, **kwargs):
         """Retorna uma função que troca para `screen` quando chamada."""
-        return lambda: self._show(screen, *args, **kwargs)
+        return lambda: self._mostrar(screen, *args, **kwargs)
 
     def _logout(self):
         session.logout()
-        self._show("login")
+        self._mostrar("login")
 
-    def _show(self, screen, *args, **kwargs):
+    def _mostrar(self, screen, *args, **kwargs):
         if self._current is not None:
             self._current.place_forget()
             self._current.destroy()
             self._current = None
 
-        nav = self._nav
+        nav = self._navegar
         if screen == "login":
-            frame = LoginScreen(self, switch_to_register=nav("register"),
+            frame = TelaLogin(self, switch_to_register=nav("register"),
                                 on_success=nav("home"))
         elif screen == "register":
-            frame = RegisterScreen(self, switch_to_login=nav("login"))
+            frame = TelaCadastro(self, switch_to_login=nav("login"))
         elif screen == "home":
-            frame = HomeScreen(self, nav=nav, on_logout=self._logout)
+            frame = TelaInicio(self, nav=nav, on_logout=self._logout)
         elif screen == "options":
-            frame = OptionsScreen(self, nav=nav, on_logout=self._logout)
+            frame = TelaOpcoes(self, nav=nav, on_logout=self._logout)
         elif screen == "profile":
-            frame = ProfileScreen(self, nav=nav, on_logout=self._logout)
+            frame = TelaPerfil(self, nav=nav, on_logout=self._logout)
         elif screen == "help":
-            frame = HelpScreen(self, nav=nav, on_logout=self._logout)
+            frame = TelaAjuda(self, nav=nav, on_logout=self._logout)
         elif screen == "about":
-            frame = AboutScreen(self, nav=nav, on_logout=self._logout)
+            frame = TelaSobre(self, nav=nav, on_logout=self._logout)
         elif screen == "report":
-            frame = ReportScreen(self, nav=nav, on_logout=self._logout)
+            frame = TelaRelatorios(self, nav=nav, on_logout=self._logout)
         elif screen == "game":
             (nivel,) = args
-            frame = GameScreen(self, nav=nav, on_logout=self._logout,
+            frame = TelaJogo(self, nav=nav, on_logout=self._logout,
                                nivel=nivel)
         else:
             raise ValueError(f"Tela desconhecida: {screen}")
@@ -68,4 +68,4 @@ class App(tk.Tk):
 
 
 if __name__ == "__main__":
-    App().mainloop()
+    Aplicativo().mainloop()
